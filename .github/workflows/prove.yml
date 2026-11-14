@@ -1,0 +1,168 @@
+name: Prove
+
+# conjecture -> prompt -> Lean 4 -> verdict, with every attempt committed to audit/.
+#
+# The model key and the untrusted Lean code never share a step: "ask the model"
+# steps hold the key and run no Lean; "verify" steps run Lean and hold no key.
+# That is why the rounds are written out one by one below and not as a loop.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "PROBLEM or PROBLEM/STEP, space-separated. Empty: every formalised step not yet proved."
+        default: ""
+      max_attempts:
+        description: "Attempts allowed per step (1 to 5)"
+        default: "3"
+      force:
+        description: "Also attempt steps that already have an accepted proof"
+        type: boolean
+        default: false
+  push:
+    paths:
+      - "problems/**"
+      - "prompts/**"
+
+permissions:
+  contents: write # to commit the audit trail and the accepted proofs
+
+concurrency:
+  group: prove-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      ZTPROOF_MODEL: ${{ vars.ZTPROOF_MODEL }}
+      ZTPROOF_EFFORT: ${{ vars.ZTPROOF_EFFORT }}
+    steps:
+      - name: Is a model key configured?
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No ANTHROPIC_API_KEY secret in this repository, so no model was asked and nothing was recorded."
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.key.outputs.present == 'true'
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: steps.key.outputs.present == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install Lean and fetch the Mathlib build
+        if: steps.key.outputs.present == 'true'
+        uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee # v1.7.1
+        with:
+          auto-config: "false"
+          use-mathlib-cache: "true"
+
+      - name: Install the platform
+        if: steps.key.outputs.present == 'true'
+        run: pip install -e .
+
+      - name: Start a run
+        if: steps.key.outputs.present == 'true'
+        env:
+          ONLY: ${{ inputs.only }}
+          MAX_ATTEMPTS: ${{ inputs.max_attempts || '3' }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          case "$MAX_ATTEMPTS" in 1|2|3|4|5) ;; *) echo "max_attempts must be 1 to 5"; exit 2 ;; esac
+          args=(--max-attempts "$MAX_ATTEMPTS" --run-id "$(date -u +%Y%m%dT%H%M%SZ)-gh${GITHUB_RUN_NUMBER}")
+          for item in $ONLY; do args+=(--only "$item"); done
+          if [ "$FORCE" = "true" ]; then args+=(--force); fi
+          RUN="$(ztproof init "${args[@]}")"
+          echo "RUN=$RUN" >> "$GITHUB_ENV"
+          echo "RUN_ID=$(basename "$RUN")" >> "$GITHUB_ENV"
+
+      - name: Pinned statements elaborate
+        if: steps.key.outputs.present == 'true'
+        run: ztproof statements --run "$RUN" || echo "::warning::A pinned statement does not elaborate. See the report."
+
+      - name: "Round 1: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN"
+
+      - name: "Round 1: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN"
+
+      - name: "Round 2: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN"
+
+      - name: "Round 2: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN"
+
+      - name: "Round 3: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN"
+
+      - name: "Round 3: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN"
+
+      - name: "Round 4: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN"
+
+      - name: "Round 4: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN"
+
+      - name: "Round 5: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN"
+
+      - name: "Round 5: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN"
+
+      - name: Keep the run as a build artefact
+        if: always() && steps.key.outputs.present == 'true' && env.RUN != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-${{ env.RUN_ID }}
+          path: ${{ env.RUN }}
+
+      - name: Commit the audit trail and any accepted proof
+        if: always() && steps.key.outputs.present == 'true' && env.RUN != ''
+        run: |
+          ztproof report --run "$RUN" > /dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audit/runs proofs
+          if git diff --cached --quiet; then echo "nothing to record"; exit 0; fi
+          git commit -m "audit: record run ${RUN_ID}"
+          for try in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep $((try * 5))
+          done
+          exit 1
+
+      - name: Referee report
+        if: steps.key.outputs.present == 'true'
+        run: ztproof report --run "$RUN" --summary

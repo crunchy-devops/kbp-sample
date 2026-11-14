@@ -1,0 +1,38 @@
+# Test problem for the gate. Never sent to a model.
+id = "gatecheck"
+title = "Gate self-test, core Lean"
+source = "Written for the test suite."
+status = "known"
+imports = []
+informal = "Statements used to check that the gate accepts honest proofs and rejects cheats."
+preamble = """
+/-- Sum of the first `n` odd numbers. -/
+def sumOdds : Nat → Nat
+  | 0 => 0
+  | n + 1 => sumOdds n + (2 * n + 1)
+"""
+
+[[steps]]
+id = "sum_odds"
+informal = "The sum of the first n odd numbers is n squared."
+theorem = "sum_odds_eq_sq"
+signature = "(n : Nat) : sumOdds n = n * n"
+formalised_by = "test suite"
+
+[[steps]]
+id = "add_comm"
+informal = "Addition of natural numbers is commutative."
+theorem = "nat_add_comm'"
+signature = "(a b : Nat) : a + b = b + a"
+formalised_by = "test suite"
+
+[[steps]]
+id = "big_decide"
+informal = "A finite check that is true by computation."
+theorem = "count_check"
+signature = ": ((List.range 200).filter (fun n => n * n % 7 = 2)).length = 57"
+formalised_by = "test suite"
+
+[[steps]]
+id = "not_yet"
+informal = "A step without a Lean statement."
