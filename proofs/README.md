@@ -4,4 +4,6 @@ One pair of files per proved step: `<problem>/<step>.lean` is the Lean text exac
 
 Files arrive here only from the `Prove` workflow, after all five gate stages. Being here is not a permanent honour: `ztproof recheck` runs the whole gate again on every file, in CI, on every push. A proof whose pinned statement has since changed is reported as stale.
 
+Proofs of the golden set are not kept here. Their reference proofs live in `golden/`, written by hand and checked by `ztproof golden`; what a model wrote for them during a calibration stays in that run's audit trail.
+
 It is empty until the first accepted run. We would rather show an empty shelf than a decorated one.

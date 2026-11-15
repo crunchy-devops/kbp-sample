@@ -9,7 +9,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
+import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -34,6 +37,7 @@ class Completed:
     stdout: str
     stderr: str
     seconds: float
+    max_rss_mb: float = 0.0  # peak resident memory of the process
 
     @property
     def timed_out(self) -> bool:
@@ -131,16 +135,39 @@ def lean_env(workdir: Path, *, packages: bool) -> dict[str, str]:
 
 
 def run(argv: list[str], *, cwd: Path, env: dict[str, str], timeout: float) -> Completed:
+    """Run one toolchain process to the end, or kill it at `timeout`.
+
+    The process gets its own session, so a timeout kills whatever it started as
+    well. Its peak resident memory comes from the kernel's accounting for that one
+    child (`wait4`), which is what Stage 0 uses to size the pool of Lean workers.
+    """
     start = time.monotonic()
-    try:
-        proc = subprocess.run(
-            argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout, check=False
-        )
-        return Completed(argv, proc.returncode, proc.stdout, proc.stderr, time.monotonic() - start)
-    except subprocess.TimeoutExpired as exc:
-        def text(raw: bytes | str | None) -> str:
-            return raw.decode(errors="replace") if isinstance(raw, bytes) else (raw or "")
-        return Completed(argv, None, text(exc.stdout), text(exc.stderr), time.monotonic() - start)
+    timed_out = threading.Event()
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                                start_new_session=True)
+
+        def kill() -> None:
+            timed_out.set()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+        timer = threading.Timer(timeout, kill)
+        timer.start()
+        try:
+            _, status, usage = os.wait4(proc.pid, 0)
+        finally:
+            timer.cancel()
+        proc.returncode = os.waitstatus_to_exitcode(status)  # reaped here; Popen must not wait again
+        out.seek(0)
+        err.seek(0)
+        stdout, stderr = out.read().decode(errors="replace"), err.read().decode(errors="replace")
+    return Completed(
+        argv, None if timed_out.is_set() else proc.returncode, stdout, stderr, time.monotonic() - start,
+        max_rss_mb=round(usage.ru_maxrss / 1024, 1),  # Linux reports kilobytes
+    )
 
 
 def compile_module(workdir: Path, module: str, *, packages: bool, timeout: float) -> Compilation:

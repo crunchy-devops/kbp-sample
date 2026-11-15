@@ -4,6 +4,11 @@ name: Prove
 # One run covers a whole batch of documents: the model is asked about several
 # claims at once, and each document gets its own referee report.
 #
+# Stage 0 comes first. The golden batch, known results and one false statement,
+# goes through the very same pipeline with the very same configuration. If it is
+# not a go, the job stops there and no document of the batch is touched. If it
+# is, its measurements set how many requests and Lean checks run at a time.
+#
 # The model key and the untrusted Lean code never share a step: "ask the model"
 # steps hold the key and run no Lean; "verify" steps run Lean and hold no key.
 # That is why the rounds are written out one by one below and not as a loop.
@@ -12,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       batch:
-        description: "Batch to run: the name of a file in batches/, without .toml. Empty: every problem."
+        description: "Batch to run: the name of a file in batches/, without .toml. Empty: every problem outside the golden set. 'golden': Stage 0 only."
         default: ""
       only:
         description: "PROBLEM or PROBLEM/STEP, space-separated. Empty: every formalised step not yet proved."
@@ -29,6 +34,7 @@ on:
       - "problems/**"
       - "prompts/**"
       - "batches/**"
+      - "golden/**"
 
 permissions:
   contents: write # to commit the audit trail and the accepted proofs
@@ -40,16 +46,22 @@ concurrency:
 jobs:
   prove:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       ZTPROOF_MODEL: ${{ vars.ZTPROOF_MODEL }}
       ZTPROOF_EFFORT: ${{ vars.ZTPROOF_EFFORT }}
+      ZTPROOF_TPM_LIMIT: ${{ vars.ZTPROOF_TPM_LIMIT }}
+      GOLDEN_BATCH: golden
+      BATCH: ${{ inputs.batch }}
+      MAX_ATTEMPTS: ${{ inputs.max_attempts || '3' }}
     steps:
       - name: Is a model key configured?
         id: key
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          case "$MAX_ATTEMPTS" in 1|2|3|4|5) ;; *) echo "max_attempts must be 1 to 5"; exit 2 ;; esac
+          if [ "$BATCH" = "$GOLDEN_BATCH" ]; then echo "PRODUCTION=false" >> "$GITHUB_ENV"; else echo "PRODUCTION=true" >> "$GITHUB_ENV"; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
@@ -78,16 +90,94 @@ jobs:
         if: steps.key.outputs.present == 'true'
         run: pip install -e .
 
-      - name: Start a run
+      # ---------------------------------------------------------------- Stage 0
+
+      - name: "Stage 0: the golden set's reference proofs pass the gate (no model)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof golden
+
+      - name: "Stage 0: start the golden run"
+        if: steps.key.outputs.present == 'true'
+        run: |
+          RUN0="$(ztproof init --batch "$GOLDEN_BATCH" --max-attempts "$MAX_ATTEMPTS" --run-id "$(date -u +%Y%m%dT%H%M%SZ)-gh${GITHUB_RUN_NUMBER}-stage0")"
+          echo "RUN0=$RUN0" >> "$GITHUB_ENV"
+          echo "RUN0_ID=$(basename "$RUN0")" >> "$GITHUB_ENV"
+
+      - name: "Stage 0: golden statements elaborate"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof statements --run "$RUN0"
+
+      - name: "Stage 0, round 1: ask the model (holds the key, runs no Lean)"
         if: steps.key.outputs.present == 'true'
         env:
-          BATCH: ${{ inputs.batch }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN0" --jobs 4
+
+      - name: "Stage 0, round 1: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN0" --jobs 1
+
+      - name: "Stage 0, round 2: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN0" --jobs 4
+
+      - name: "Stage 0, round 2: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN0" --jobs 1
+
+      - name: "Stage 0, round 3: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN0" --jobs 4
+
+      - name: "Stage 0, round 3: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN0" --jobs 1
+
+      - name: "Stage 0, round 4: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN0" --jobs 4
+
+      - name: "Stage 0, round 4: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN0" --jobs 1
+
+      - name: "Stage 0, round 5: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ztproof generate --run "$RUN0" --jobs 4
+
+      - name: "Stage 0, round 5: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof verify --run "$RUN0" --jobs 1
+
+      - name: "Stage 0: go or no-go, and the worker pools"
+        id: stage0
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if [ "$PRODUCTION" = "true" ]; then
+            ztproof calibrate --run "$RUN0" --summary --next-batch "$BATCH"
+          else
+            ztproof calibrate --run "$RUN0" --summary
+          fi
+
+      # ------------------------------------------------- the batch, if Stage 0 said go
+      # A failed step above stops everything below, except the two steps that keep
+      # the records. That is the whole mechanism: no go, no batch.
+
+      - name: Start a run
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
           ONLY: ${{ inputs.only }}
-          MAX_ATTEMPTS: ${{ inputs.max_attempts || '3' }}
           FORCE: ${{ inputs.force }}
         run: |
-          case "$MAX_ATTEMPTS" in 1|2|3|4|5) ;; *) echo "max_attempts must be 1 to 5"; exit 2 ;; esac
-          args=(--max-attempts "$MAX_ATTEMPTS" --run-id "$(date -u +%Y%m%dT%H%M%SZ)-gh${GITHUB_RUN_NUMBER}")
+          args=(--max-attempts "$MAX_ATTEMPTS" --run-id "$(date -u +%Y%m%dT%H%M%SZ)-gh${GITHUB_RUN_NUMBER}" --calibration "$RUN0_ID")
           if [ -n "$BATCH" ]; then args+=(--batch "$BATCH"); fi
           for item in $ONLY; do args+=(--only "$item"); done
           if [ "$FORCE" = "true" ]; then args+=(--force); fi
@@ -96,75 +186,95 @@ jobs:
           echo "RUN_ID=$(basename "$RUN")" >> "$GITHUB_ENV"
 
       - name: Pinned statements elaborate
-        if: steps.key.outputs.present == 'true'
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         run: ztproof statements --run "$RUN" || echo "::warning::A pinned statement does not elaborate. See the report."
 
-      - name: "Round 1: ask the model (holds the key, runs no Lean)"
-        if: steps.key.outputs.present == 'true'
+      - name: "Batch, round 1: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: ztproof generate --run "$RUN" --jobs 8
+          JOBS: ${{ steps.stage0.outputs.generate_jobs }}
+        run: ztproof generate --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 1: verify in Lean (runs untrusted code, holds no key)"
-        if: steps.key.outputs.present == 'true'
-        run: ztproof verify --run "$RUN" --jobs 2
+      - name: "Batch, round 1: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
+          JOBS: ${{ steps.stage0.outputs.verify_jobs }}
+        run: ztproof verify --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 2: ask the model (holds the key, runs no Lean)"
-        if: steps.key.outputs.present == 'true'
+      - name: "Batch, round 2: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: ztproof generate --run "$RUN" --jobs 8
+          JOBS: ${{ steps.stage0.outputs.generate_jobs }}
+        run: ztproof generate --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 2: verify in Lean (runs untrusted code, holds no key)"
-        if: steps.key.outputs.present == 'true'
-        run: ztproof verify --run "$RUN" --jobs 2
+      - name: "Batch, round 2: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
+          JOBS: ${{ steps.stage0.outputs.verify_jobs }}
+        run: ztproof verify --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 3: ask the model (holds the key, runs no Lean)"
-        if: steps.key.outputs.present == 'true'
+      - name: "Batch, round 3: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: ztproof generate --run "$RUN" --jobs 8
+          JOBS: ${{ steps.stage0.outputs.generate_jobs }}
+        run: ztproof generate --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 3: verify in Lean (runs untrusted code, holds no key)"
-        if: steps.key.outputs.present == 'true'
-        run: ztproof verify --run "$RUN" --jobs 2
+      - name: "Batch, round 3: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
+          JOBS: ${{ steps.stage0.outputs.verify_jobs }}
+        run: ztproof verify --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 4: ask the model (holds the key, runs no Lean)"
-        if: steps.key.outputs.present == 'true'
+      - name: "Batch, round 4: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: ztproof generate --run "$RUN" --jobs 8
+          JOBS: ${{ steps.stage0.outputs.generate_jobs }}
+        run: ztproof generate --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 4: verify in Lean (runs untrusted code, holds no key)"
-        if: steps.key.outputs.present == 'true'
-        run: ztproof verify --run "$RUN" --jobs 2
+      - name: "Batch, round 4: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
+          JOBS: ${{ steps.stage0.outputs.verify_jobs }}
+        run: ztproof verify --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 5: ask the model (holds the key, runs no Lean)"
-        if: steps.key.outputs.present == 'true'
+      - name: "Batch, round 5: ask the model (holds the key, runs no Lean)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: ztproof generate --run "$RUN" --jobs 8
+          JOBS: ${{ steps.stage0.outputs.generate_jobs }}
+        run: ztproof generate --run "$RUN" --jobs "$JOBS"
 
-      - name: "Round 5: verify in Lean (runs untrusted code, holds no key)"
-        if: steps.key.outputs.present == 'true'
-        run: ztproof verify --run "$RUN" --jobs 2
+      - name: "Batch, round 5: verify in Lean (runs untrusted code, holds no key)"
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
+        env:
+          JOBS: ${{ steps.stage0.outputs.verify_jobs }}
+        run: ztproof verify --run "$RUN" --jobs "$JOBS"
 
-      - name: Keep the run as a build artefact
-        if: always() && steps.key.outputs.present == 'true' && env.RUN != ''
+      # ------------------------------------------------------------- the records
+
+      - name: Keep the runs as a build artefact
+        if: always() && steps.key.outputs.present == 'true' && env.RUN0 != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: audit-${{ env.RUN_ID }}
-          path: ${{ env.RUN }}
+          name: audit-${{ env.RUN0_ID }}
+          path: |
+            ${{ env.RUN0 }}
+            ${{ env.RUN }}
 
       - name: Commit the audit trail and any accepted proof
-        if: always() && steps.key.outputs.present == 'true' && env.RUN != ''
+        if: always() && steps.key.outputs.present == 'true' && env.RUN0 != ''
         run: |
-          ztproof report --run "$RUN" > /dev/null || true
+          ztproof report --run "$RUN0" > /dev/null || true
+          if [ -n "$RUN" ]; then ztproof report --run "$RUN" > /dev/null || true; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add audit/runs proofs
           if git diff --cached --quiet; then echo "nothing to record"; exit 0; fi
-          git commit -m "audit: record run ${RUN_ID}"
+          git commit -m "audit: record calibration ${RUN0_ID}${RUN_ID:+ and run ${RUN_ID}}"
           for try in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
             sleep $((try * 5))
@@ -172,5 +282,5 @@ jobs:
           exit 1
 
       - name: Referee report
-        if: steps.key.outputs.present == 'true'
+        if: steps.key.outputs.present == 'true' && env.PRODUCTION == 'true'
         run: ztproof report --run "$RUN" --summary

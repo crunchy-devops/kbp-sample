@@ -50,6 +50,7 @@ class Step:
     signature: str | None
     formalised_by: str
     reviewed_by: str
+    expect: str = "proved"   # "not_proved" marks a negative control: a statement known to be false
 
     @property
     def formalised(self) -> bool:
@@ -126,8 +127,8 @@ def load_problem(path: Path) -> Problem:
     if file.parent.name != pid:
         raise ProblemError(f"{where}: id {pid!r} must equal the directory name")
     status = _text(data, "status", where)
-    if status not in {"known", "open"}:
-        raise ProblemError(f"{where}: status must be 'known' or 'open'")
+    if status not in {"known", "open", "control"}:
+        raise ProblemError(f"{where}: status must be 'known', 'open' or 'control'")
     imports = data.get("imports", [])
     if not isinstance(imports, list) or not all(
         isinstance(m, str) and _LEAN_NAME.match(m) for m in imports
@@ -147,6 +148,10 @@ def load_problem(path: Path) -> Problem:
         signature = _text(raw, "signature", swhere, required=False) or None
         if bool(theorem) != bool(signature):
             raise ProblemError(f"{swhere}: give both theorem and signature, or neither")
+        if raw.get("expect", "proved") not in ("proved", "not_proved"):
+            raise ProblemError(f"{swhere}: expect must be 'proved' or 'not_proved'")
+        if raw.get("expect") == "not_proved" and status != "control":
+            raise ProblemError(f"{swhere}: only a problem with status 'control' may hold a negative control")
         if theorem:
             if not _LEAN_NAME.match(theorem) or theorem in seen_theorems:
                 raise ProblemError(f"{swhere}: theorem name {theorem!r} is invalid or duplicated")
@@ -161,6 +166,7 @@ def load_problem(path: Path) -> Problem:
                 signature=signature,
                 formalised_by=_text(raw, "formalised_by", swhere, required=bool(theorem)),
                 reviewed_by=_text(raw, "reviewed_by", swhere, required=False),
+                expect=_text(raw, "expect", swhere, required=False) or "proved",
             )
         )
     if not steps:
@@ -211,6 +217,10 @@ class Batch:
     id: str
     title: str
     problems: tuple[str, ...]
+    calibration: dict | None = None   # thresholds; present only on a golden batch
+
+
+CALIBRATION_KEYS = {"min_pass_rate": (0.0, 1.0), "min_pass_at_1": (0.0, 1.0), "max_peak_lean_mb": (1.0, 1e9)}
 
 
 def load_batch(path: Path, known: set[str]) -> Batch:
@@ -230,7 +240,17 @@ def load_batch(path: Path, known: set[str]) -> Batch:
     unknown = [p for p in problems if p not in known]
     if unknown:
         raise ProblemError(f"{where}: unknown problem(s): {', '.join(unknown)}")
-    return Batch(id=bid, title=_text(data, "title", where), problems=tuple(problems))
+    calibration = data.get("calibration")
+    if calibration is not None:
+        if not isinstance(calibration, dict):
+            raise ProblemError(f"{where}: [calibration] must be a table")
+        for key, value in calibration.items():
+            if key not in CALIBRATION_KEYS:
+                raise ProblemError(f"{where}: unknown calibration threshold {key!r}")
+            low, high = CALIBRATION_KEYS[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+                raise ProblemError(f"{where}: {key} must be a number between {low} and {high}")
+    return Batch(id=bid, title=_text(data, "title", where), problems=tuple(problems), calibration=calibration)
 
 
 def load_batches(root: Path, known: set[str]) -> list[Batch]:

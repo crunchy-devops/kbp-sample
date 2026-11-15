@@ -53,7 +53,7 @@ def test_same_inputs_same_fingerprint(fixtures: Path):
 
 def test_shipped_problems_load_and_are_consistent():
     problems = load_all(PROBLEMS_DIR)
-    assert {p.id for p in problems} >= {"smoke", "class-number"}
+    assert {p.id for p in problems} >= {"golden-core", "golden-controls", "class-number"}
     for p in problems:
         for s in p.steps:
             if s.formalised:
@@ -121,7 +121,7 @@ def test_a_vague_document_is_refused(tmp_path: Path, document: str):
 def test_shipped_batches_name_real_problems():
     known = {p.id for p in load_all(PROBLEMS_DIR)}
     batches = load_batches(BATCHES_DIR, known)
-    assert {b.id for b in batches} >= {"smoke", "worked-case"}
+    assert {b.id for b in batches} >= {"golden", "worked-case"}
 
 
 def test_a_batch_naming_an_unknown_problem_is_refused(tmp_path: Path):

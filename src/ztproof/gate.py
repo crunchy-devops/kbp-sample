@@ -53,6 +53,7 @@ class StageResult:
     passed: bool
     seconds: float = 0.0
     detail: str = ""
+    max_rss_mb: float = 0.0
 
 
 @dataclass
@@ -90,18 +91,19 @@ def write_statement(problem: Problem, step: Step, workdir: Path) -> None:
 def compile_statement(problem: Problem, step: Step, workdir: Path, config: GateConfig) -> StageResult:
     """Stage 1. Compiles the preamble and the pinned statement."""
     write_statement(problem, step, workdir)
-    seconds = 0.0
+    seconds, rss = 0.0, 0.0
     for module in ("ZtPreamble", "ZtStatement"):
         result = lean.compile_module(
             workdir, module, packages=problem.needs_packages, timeout=config.compile_timeout
         )
         seconds += result.process.seconds
+        rss = max(rss, result.process.max_rss_mb)
         if result.process.timed_out:
-            return StageResult("statement", False, seconds, f"{module}: timed out")
+            return StageResult("statement", False, seconds, f"{module}: timed out", rss)
         if not result.ok:
             detail = "\n".join(d.render() for d in result.errors) or result.process.stderr.strip()
-            return StageResult("statement", False, seconds, f"{module}: {detail}")
-    return StageResult("statement", True, seconds)
+            return StageResult("statement", False, seconds, f"{module}: {detail}", rss)
+    return StageResult("statement", True, seconds, max_rss_mb=rss)
 
 
 def apply_policy(facts: dict) -> tuple[str, str]:
@@ -165,14 +167,17 @@ def check_attempt(
         d.line = max(d.line - HEADER_LINES, 0)  # line numbers as the author of the body sees them
     verdict.diagnostics = [d.render() for d in compiled.diagnostics]
     if compiled.process.timed_out:
-        verdict.stages.append(StageResult("compile", False, compiled.process.seconds, "timed out"))
+        verdict.stages.append(StageResult("compile", False, compiled.process.seconds, "timed out",
+                                          compiled.process.max_rss_mb))
         return stop(LEAN_TIMEOUT, f"Lean did not finish within {config.compile_timeout:.0f} s")
     if not compiled.ok:
         errors = compiled.errors
         detail = errors[0].render() if errors else compiled.process.stderr.strip()[:500]
-        verdict.stages.append(StageResult("compile", False, compiled.process.seconds, detail))
+        verdict.stages.append(StageResult("compile", False, compiled.process.seconds, detail,
+                                          compiled.process.max_rss_mb))
         return stop(LEAN_ERROR, f"{len(errors)} Lean error(s); first: {detail}")
-    verdict.stages.append(StageResult("compile", True, compiled.process.seconds))
+    verdict.stages.append(StageResult("compile", True, compiled.process.seconds,
+                                      max_rss_mb=compiled.process.max_rss_mb))
 
     # 3. facts
     gate = lean.run_gate(workdir, step.theorem or "", packages=packages, timeout=config.check_timeout)
@@ -182,10 +187,10 @@ def check_attempt(
             raise ValueError("not an object")
     except (IndexError, ValueError):
         detail = (gate.stderr.strip() or gate.stdout.strip() or "no output")[:1000]
-        verdict.stages.append(StageResult("facts", False, gate.seconds, detail))
+        verdict.stages.append(StageResult("facts", False, gate.seconds, detail, gate.max_rss_mb))
         return stop(INFRASTRUCTURE, f"the gate program produced no facts: {detail}")
     verdict.facts = facts
-    verdict.stages.append(StageResult("facts", True, gate.seconds))
+    verdict.stages.append(StageResult("facts", True, gate.seconds, max_rss_mb=gate.max_rss_mb))
 
     # 4. policy
     outcome, reason = apply_policy(facts)
@@ -200,8 +205,8 @@ def check_attempt(
     replay = lean.run_replay(workdir, packages=packages, timeout=config.check_timeout)
     if replay.returncode != 0:
         detail = "timed out" if replay.timed_out else (replay.stderr.strip() or replay.stdout.strip())[:1000]
-        verdict.stages.append(StageResult("replay", False, replay.seconds, detail))
+        verdict.stages.append(StageResult("replay", False, replay.seconds, detail, replay.max_rss_mb))
         return stop(REPLAY_FAILED, f"the kernel rejected the compiled attempt on replay: {detail}")
-    verdict.stages.append(StageResult("replay", True, replay.seconds))
+    verdict.stages.append(StageResult("replay", True, replay.seconds, max_rss_mb=replay.max_rss_mb))
 
     return stop(ACCEPTED, reason)

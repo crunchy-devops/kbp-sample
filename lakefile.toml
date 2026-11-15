@@ -1,5 +1,5 @@
 name = "zerotrust"
-version = "0.2.0"
+version = "0.3.0"
 # No Lean library of our own: this package exists to pin the toolchain and Mathlib,
 # so that every statement and every attempt is checked against the same versions.
 defaultTargets = []

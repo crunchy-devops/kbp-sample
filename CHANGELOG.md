@@ -1,6 +1,40 @@
 # Version history
 
-Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are the source material for chapter 3 of *Zero-trust AI*.
+Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
+
+## 0.3.0, 15 November 2026
+
+Stage 0. No batch starts cold: a golden set goes through the same pipeline first, and its result decides whether the batch may start and how many workers it gets.
+
+### What changed
+
+* A **golden set**: `golden-core`, five small known results (the old `smoke` problem, renamed and extended), each with a hand-written reference proof under `golden/`; and `golden-controls`, one statement known to be false. `ztproof golden` puts the reference proofs through the gate with no model, in CI, on every push.
+* **Negative controls.** A step may be marked `expect = "not_proved"`, only in a problem whose status is `control`. The prompt tells the model the statement may be false. An accepted control is a no-go whatever else was measured, and is never filed as a proof.
+* **`ztproof calibrate`** reads a finished golden run and writes `CALIBRATION.md` and `calibration.json`: go or no-go against the thresholds in `batches/golden.toml`, pass rate, Pass@1, outcomes by class, tokens per request and per minute, seconds per gate stage, and a comparison with the previous calibration on file.
+* **Measured memory.** Every Lean process now reports its own peak resident memory, per gate stage, in `verdict.json` and `attempts.jsonl`. A Lean process that exceeds its time limit is now killed with its children.
+* **Worker pools from measurements.** Lean checks at a time: CPUs, or 80 % of memory over the peak of one Lean process, whichever is smaller. Model requests at a time: the account's tokens-per-minute limit over the measured rate of one worker, when the limit is given.
+* **A go is tied to a configuration**: platform code and prompts (one fingerprint over the tracked files that decide behaviour), model asked and models that answered, effort, attempts allowed, Lean and Mathlib builds, runner image. `ztproof init --calibration RUN` refuses a no-go and a calibration made with another configuration.
+* The **Prove workflow** runs Stage 0 first, in the same job and on the same machine as the batch. On a no-go the job fails, the calibration is committed, and the batch never starts.
+* A run that names no batch now leaves the golden problems out.
+
+### What it does not do yet
+
+* Enforce Pass@1. A threshold needs a baseline, a baseline needs real runs, and there have been none. Pass@1 is measured, shown next to the previous calibration, and enforces nothing. The same goes for the memory limit.
+* Measure Mathlib. The golden set is core Lean only, so Stage 0 knows nothing about the memory or time of a claim that imports Mathlib. Until a golden claim does, such a batch gets its Lean checks one at a time.
+* Evaluate claim extraction, a formaliser with an adversarial auditor, or containerised runners. The platform has none of these stages, and the calibration report lists them as not evaluated, not as passed.
+* Give a baseline as a range over several runs. One calibration is one sample of a model that does not answer the same way twice.
+* Everything listed under 0.2.0 and 0.1.0 that is not mentioned above.
+
+### What was measured on the way
+
+On the build machine (4 CPUs, 16 GB), for the five reference proofs, all core Lean: the whole gate takes about 3 seconds per proof. The largest process is not the one that compiles the proof, at about 470 MB. It is the gate's own fact-reading program, `lean/Gate.lean`, at about 2 300 MB, most likely because it imports Lean's metaprogramming library to inspect a compiled module. The inspector is five times heavier than the thing inspected.
+
+### What went wrong on the way
+
+1. **The worker count in 0.2.0 was a guess.** The Prove workflow ran two Lean checks at a time because two seemed reasonable. Nobody had measured anything. With the figure above, two checks need about 4.6 GB before Mathlib is even loaded, which a small runner may not have. The number is now computed, and where it cannot be computed it is one.
+2. **The first identity for a configuration made every go invalid.** The commit was part of it. But the workflow commits the calibration's own audit trail, which moves the commit, so the batch that followed could never have matched the calibration that cleared it. Caught while writing the workflow, before any run. The commit is now replaced by a fingerprint of the files that decide behaviour.
+3. **A false statement was about to become a research problem.** In 0.2.0, a run that named no batch took every problem in `problems/`. With the negative control added, that included a statement known to be false, to be attempted on every push at the full price. Also caught before any run.
+4. **Still nothing has run for real.** The push is still refused, so there has been no CI run, and there is no model key, so there has been no calibration. Version 0.3.0 can decide whether a batch may start and has never decided it once. Every figure above comes from the reference proofs, not from a model.
 
 ## 0.2.0, 15 November 2026
 

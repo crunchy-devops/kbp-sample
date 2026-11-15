@@ -1,0 +1,30 @@
+# The golden set, negative controls: statements known to be FALSE.
+#
+# They go through the pipeline like any other claim. The expected result is that
+# nothing is accepted. If one of them ever comes out "proved", the gate has a
+# hole, and Stage 0 stops everything.
+#
+# The prompt tells the model the truth: this is a control and may be false.
+
+id = "golden-controls"
+title = "Golden set, negative controls: false statements"
+source = "Written for the platform on 15 November 2026."
+status = "control"
+imports = []
+
+informal = """
+Calibration controls. Each statement below looks like a familiar identity and is false as written.
+"""
+
+[document]
+kind = "note"
+
+[[steps]]
+id = "truncated_subtraction"
+part = "(N1)"
+informal = "For all natural numbers `a`$ and `b`$, `(a - b) + b = a`$. This is false in Lean: with `a = 0`$ and `b = 1`$ the left-hand side is `1`$, because subtraction of natural numbers stops at zero."
+theorem = "sub_add_cancel_unconditional"
+signature = "(a b : Nat) : a - b + b = a"
+formalised_by = "Claude, in the platform build thread, 15 November 2026"
+reviewed_by = ""
+expect = "not_proved"

@@ -21,12 +21,15 @@ The repository is still called `kbp-sample`, for historical reasons that no long
 
 There is no context map and no retrieval step. A prompt is built from the pinned problem and, from the second attempt on, from the previous failure. That is all the model is given.
 
+Before any batch, the same pipeline is run on a golden set. This is Stage 0, described below: no go, no batch.
+
 | Stage | Where | Trusted? |
 | --- | --- | --- |
 | Document, claims and Lean statements | `problems/<id>/problem.toml`, `batches/` | Written and reviewed by people. The one input the kernel cannot check |
 | Prompt | `prompts/v1/`, `src/ztproof/prompt.py` | Versioned text, fingerprinted in every record |
 | Model call | `src/ztproof/generator.py` | No. The reply is an untrusted input |
 | Gate | `lean/Gate.lean`, `src/ztproof/gate.py` | Yes, and it is short enough to read in one sitting |
+| Calibration | `batches/golden.toml`, `golden/`, `src/ztproof/calibration.py` | Measured on every run. Thresholds are set by people |
 | Audit trail | `audit/runs/`, `src/ztproof/pipeline.py` | Append-only by convention, in Git |
 | Referee report | `src/ztproof/report.py` | Generated from the trail, never from a model |
 
@@ -55,22 +58,58 @@ lake exe cache get        # fetches the Mathlib build; a few minutes, once
 pytest -q                 # the gate against its own cheats
 ztproof problems          # what is pinned, and what has been reviewed
 ztproof check             # every pinned statement elaborates
+ztproof golden            # the golden set's reference proofs pass the gate
 ztproof recheck           # every accepted proof still passes
 
 # One Lean file through the gate, by hand:
-ztproof gate --problem smoke --step sum_odds --file my_attempt.lean
+ztproof gate --problem golden-core --step sum_odds --file my_attempt.lean
 
-# The whole loop, locally. Needs ANTHROPIC_API_KEY and spends real tokens:
-ztproof run --only smoke
+# Stage 0, locally. Needs ANTHROPIC_API_KEY and spends real tokens:
+ztproof run --batch golden --run-id my-calibration
+ztproof calibrate --run audit/runs/my-calibration
 ```
+
+## Stage 0: calibration on a golden set
+
+A batch of preprints is expensive, and a platform that has quietly drifted will spend the whole budget before anyone notices. So no batch starts cold. The golden batch, `batches/golden.toml`, goes first, through the same prompts, the same model and the same gate, and a short report says go or no-go.
+
+The golden set has two halves.
+
+* `golden-core`: five small results known to be true. Each has a reference proof in `golden/` that the gate accepts, which `ztproof golden` checks with no model at all. If a reference proof stops passing, the canary is dead and nothing measured with it means anything.
+* `golden-controls`: a statement known to be **false**. It looks like a familiar identity, `(a - b) + b = a`$ on the natural numbers, and the prompt says plainly that it is a control. It must never come out proved. If it does, the gate has a hole, and that is worth more than every other measurement on the page.
+
+`ztproof calibrate` reads the finished golden run and produces `CALIBRATION.md` and `calibration.json` in the run directory.
+
+| Criterion | Enforced? |
+| --- | --- |
+| The run completed, and every golden statement elaborates | Yes |
+| No false statement was accepted | Yes |
+| Pass rate: share of golden claims proved within the attempts allowed | Yes, 100 % |
+| Pass@1: share proved at the first attempt | Reported. No threshold until a baseline has been measured |
+| Peak memory of one Lean process | Reported. No limit set yet |
+
+A threshold is a baseline minus a tolerance. There is no baseline yet, because no real run has happened, so Pass@1 is measured and shown next to the previous calibration, and enforces nothing. Inventing a number would have been easy.
+
+The report also sizes the two worker pools for the batch that follows, from what was measured and not from a guess:
+
+```text
+Lean checks at a time    = min(CPUs, 80 % of the machine's memory / peak memory of one Lean process)
+model requests at a time = tokens-per-minute limit / tokens per minute of one worker
+```
+
+The second line needs the account's limit, given as the repository variable `ZTPROOF_TPM_LIMIT`; without it the platform sends eight requests at a time. And where nothing was measured, nothing is assumed: the golden set is core Lean only, so a batch that imports Mathlib gets its Lean checks one at a time until a golden claim imports Mathlib too.
+
+A go is valid for one configuration: platform code and prompts, model asked, effort, attempts allowed, Lean and Mathlib builds, runner image. The report prints it with a fingerprint, and `ztproof init --calibration RUN` refuses to start a batch on a no-go or on a calibration made with another configuration.
+
+Three things in the usual description of such a stage are not here, and the report lists them as **not evaluated**, which is not the same as passed: extracting claims from a document, a formaliser with an adversarial auditor, and containerised runners. The platform does not have those stages.
 
 ## CI/CD
 
 Two workflows, in `.github/workflows/`.
 
-**CI** runs on every push and needs no secret. It runs the gate's test suite, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
+**CI** runs on every push and needs no secret. It runs the gate's test suite, checks the golden set against its reference proofs, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
 
-**Prove** runs when a problem, a batch or a prompt changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow starts a run for the batch it was given, alternates "ask the model" and "verify in Lean" for up to five rounds, commits the run to `audit/runs/` and any accepted proof to `proofs/`, and prints the referee report as the job summary.
+**Prove** runs when a problem, a batch, a prompt or the golden set changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow runs Stage 0 first. On a no-go the job fails there, the calibration is committed to `audit/runs/`, and no document of the batch is touched. On a go it starts a run for the batch it was given, with the worker pools Stage 0 computed, alternates "ask the model" and "verify in Lean" for up to five rounds, commits both runs to `audit/runs/` and any accepted proof to `proofs/`, and prints the calibration and the referee report as the job summary.
 
 The key and the untrusted Lean code never share a step. Steps that ask the model hold the key and run no Lean; steps that verify run Lean and hold no key. This is why the rounds are written out one by one in the workflow, which is less elegant than a loop and rather the point.
 
@@ -99,9 +138,10 @@ Formulas in the informal text use the manuscript's convention, a code span follo
 
 Facts a problem lets us assume, and earlier parts a later part relies on, enter a Lean statement as explicit hypotheses. They never enter as axioms, which the gate would reject in any case.
 
-Two problems are pinned today.
+Three problems are pinned today.
 
-* `smoke`: three small known results in core Lean, to prove the plumbing. If one of these fails, look at the platform before blaming the model.
+* `golden-core`: five small known results in core Lean, the positive half of the golden set. If one of these fails, look at the platform before blaming the model.
+* `golden-controls`: one false statement, the negative half. A run that names no batch leaves both golden problems out: canaries are not results.
 * `class-number`: the book's worked case, Dirichlet's class number formula for `\mathbb{Q}(\sqrt{-p})`$ and the excess of quadratic residues, in nine steps from (a) to (e). One step has a Lean statement so far, and nobody has reviewed it.
 
 ## The audit trail and the referee report
@@ -110,11 +150,14 @@ Two problems are pinned today.
 
 Each run also gets `REPORT.md`, written for a reader who trusts neither the model nor us. It opens with a summary by document: claims pinned, proved, attempted and not proved, without a Lean statement, and how many statements no human has reviewed. Then, for every claim, it gives the informal text and where it sits in the document, the pinned statement, who reviewed it, the evidence for acceptance check by check, the history of attempts, and a closing section on what the run did not establish. Each document has the same report on its own, in `<run>/<document>/REPORT.md`.
 
+A run cleared by Stage 0 names the calibration in its report. A calibration run files nothing under `proofs/`.
+
 ## What we still do not trust
 
 * **The statements.** Lean checks that a proof matches a statement. Whether the statement says what the mathematician meant is a human judgement, and today every statement here is unreviewed.
 * **Elaboration.** Compiling a Lean file can run arbitrary code. We keep the key out of those steps and give Lean a stripped environment, but there is no sandbox yet, so a hostile attempt could still interfere with the files of its own run.
 * **One kernel.** Acceptance rests on Lean's reference kernel. The toolchain ships independent checkers; we do not use them yet.
+* **The golden set.** Five easy results and one false statement say that the plumbing works and that one particular hole is closed. They say little about hard claims, and nothing about Mathlib. A go means "not obviously broken", never "correct".
 * **Ourselves.** `lean/Gate.lean` and `src/ztproof/gate.py` are the trusted code. They are small, tested against cheats, and have already been wrong once; see `CHANGELOG.md`.
 
 ## Version history

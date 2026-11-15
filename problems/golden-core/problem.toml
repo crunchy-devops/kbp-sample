@@ -1,15 +1,19 @@
-# Smoke test: three results nobody doubts, in core Lean, so that a failure here
-# is the platform's fault and not the mathematics'. Not part of the book's
-# worked case; it exists to prove the plumbing.
+# The golden set, core Lean: five small results nobody doubts, each with a
+# reference proof in golden/golden-core/ that the gate accepts.
+#
+# It is the canary for Stage 0. If the pipeline cannot prove these, the fault is
+# in the platform, the prompt or the model, and no new document should be run
+# until it is found. Two of the five are traps: natural-number subtraction and
+# division do not behave like their real-number namesakes.
 
-id = "smoke"
-title = "Platform smoke test: three small known results"
-source = "Written for the platform on 14 November 2026. Elementary folklore."
+id = "golden-core"
+title = "Golden set, core Lean: five small known results"
+source = "Written for the platform on 14 and 15 November 2026. Elementary folklore."
 status = "known"
 imports = []
 
 informal = """
-Three independent warm-up statements about natural numbers. Each is elementary and
+Five independent warm-up statements about natural numbers. Each is elementary and
 well known. They share nothing except the definitions below.
 """
 
@@ -56,4 +60,22 @@ informal = "Among `1, 2, \\ldots, 11`$ there are exactly three more quadratic re
 theorem = "residue_excess_23"
 signature = ": residueExcess 23 = 3"
 formalised_by = "Claude, in the platform build thread, 14 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "sub_add_cancel"
+part = "(4)"
+informal = "For natural numbers `a`$ and `b`$ with `b \\le a`$, `(a - b) + b = a`$. Without the hypothesis the claim is false in Lean, where subtraction of natural numbers stops at zero."
+theorem = "sub_add_cancel_of_le"
+signature = "(a b : Nat) (h : b ≤ a) : a - b + b = a"
+formalised_by = "Claude, in the platform build thread, 15 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "half_double_le"
+part = "(5)"
+informal = "For every natural number `n`$, `2 \\lfloor n/2 \\rfloor \\le n`$, and equality fails exactly when `n`$ is odd. Only the inequality is to be proved."
+theorem = "half_double_le"
+signature = "(n : Nat) : n / 2 * 2 ≤ n"
+formalised_by = "Claude, in the platform build thread, 15 November 2026"
 reviewed_by = ""

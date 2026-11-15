@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import __version__, gate, lean
+from . import __version__, calibration, gate, lean
 from .generator import DEFAULT_EFFORT, DEFAULT_MODEL
 from .pipeline import (BATCHES_DIR, PROBLEMS_DIR, Run, check_statements, generate_round, init_run,
                        recheck_proofs, verify_round)
@@ -46,12 +46,85 @@ def _batch(args: argparse.Namespace, problems: list) -> Batch | None:
     raise ProblemError(f"no batch named {args.batch!r} in batches/")
 
 
+def _outside_golden(problems: list) -> list:
+    """The problems that are not part of a golden set. A run that names no batch
+    means these: canaries and false statements are not results."""
+    golden = {pid for b in load_batches(BATCHES_DIR, {p.id for p in problems}) if b.calibration is not None
+              for pid in b.problems}
+    return [p for p in problems if p.id not in golden]
+
+
 def _start(args: argparse.Namespace) -> Run:
     problems = load_all(PROBLEMS_DIR)
+    batch = _batch(args, problems)
+    if batch is None and not args.only:
+        problems = _outside_golden(problems)
+    cleared = None
+    if args.calibration:
+        cleared = calibration.clearance(args.calibration, model=args.model, effort=args.effort,
+                                        max_attempts=args.max_attempts)
     return init_run(
         problems=problems, only=args.only or None, max_attempts=args.max_attempts, model=args.model,
-        effort=args.effort, run_id=args.run_id, force=args.force, batch=_batch(args, problems),
+        effort=args.effort, run_id=args.run_id, force=args.force, batch=batch, calibrated_by=cleared,
     )
+
+
+def _output(**values) -> None:
+    """Hand values to the next CI step."""
+    target = os.environ.get("GITHUB_OUTPUT")
+    if target:
+        with open(target, "a", encoding="utf-8") as fh:
+            for key, value in values.items():
+                fh.write(f"{key}={value}\n")
+
+
+def cmd_golden(args: argparse.Namespace) -> int:
+    """The golden set against the gate. No model, no key, no run directory."""
+    problems = {p.id: p for p in load_all(PROBLEMS_DIR)}
+    batches = [b for b in load_batches(BATCHES_DIR, set(problems)) if b.calibration is not None]
+    if not batches:
+        print("ztproof: no batch has a [calibration] table, so there is no golden set", file=sys.stderr)
+        return 1
+    failures = 0
+    for batch in batches:
+        print(f"{batch.id}: {batch.title}")
+        for r in calibration.check_references(batch, problems, _config(args)):
+            print(f"  {'ok    ' if r.ok else 'FAILED'} {r.key:40} {r.outcome:16} {r.seconds:6.1f} s {r.max_rss_mb:7.0f} MB")
+            if not r.ok:
+                failures += 1
+                print(f"         {r.detail}")
+    return 1 if failures else 0
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    """Stage 0: go or no-go, and the worker pools, from a finished golden run."""
+    run = _run(args)
+    next_imports: list[str] | None = None
+    if args.next_batch is not None:
+        everything = load_all(PROBLEMS_DIR)
+        by_id = {p.id: p for p in everything}
+        if args.next_batch == "":
+            following = _outside_golden(everything)
+        else:
+            named = [b for b in load_batches(BATCHES_DIR, set(by_id)) if b.id == args.next_batch]
+            if not named:
+                raise ProblemError(f"no batch named {args.next_batch!r} in batches/")
+            following = [by_id[pid] for pid in named[0].problems]
+        next_imports = sorted({i for p in following for i in p.imports})
+    result = calibration.calibrate(run, tpm_limit=args.tpm_limit, next_imports=next_imports)
+    calibration.save(run, result)
+    text = calibration.render(result)
+    print(text)
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY") if args.summary else None
+    if summary_file:
+        with open(summary_file, "a", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    _output(go=str(result.go).lower(), verify_jobs=result.sizing["verify_jobs"],
+            generate_jobs=result.sizing["generate_jobs"])
+    if not result.go:
+        print("ztproof: Stage 0 is a no-go. The batch must not start.", file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_batches(args: argparse.Namespace) -> int:
@@ -95,6 +168,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 def cmd_init(args: argparse.Namespace) -> int:
     run = _start(args)
     print(run.path)
+    _output(run=run.path, run_id=run.meta["run_id"])
     return 0
 
 
@@ -204,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--effort", default=os.environ.get("ZTPROOF_EFFORT") or DEFAULT_EFFORT)
         p.add_argument("--run-id")
         p.add_argument("--force", action="store_true", help="also attempt steps that already have an accepted proof")
+        p.add_argument("--calibration", metavar="RUN_ID",
+                       help="the Stage 0 run that cleared this one; refused unless it was a go for this configuration")
 
     add("problems", cmd_problems, "list the pinned problems and their steps")
     add("batches", cmd_batches, "list the batches and how far each document is formalised")
@@ -219,6 +295,13 @@ def main(argv: list[str] | None = None) -> int:
         stage.add_argument("--run", required=True, help="run directory")
         if name == "report":
             stage.add_argument("--summary", action="store_true", help="also append it to the CI job summary")
+    add("golden", cmd_golden, "check the golden set's reference proofs against the gate, with no model")
+    c = add("calibrate", cmd_calibrate, "Stage 0: go or no-go and worker pools, from a finished golden run")
+    c.add_argument("--run", required=True, help="run directory of the golden batch")
+    c.add_argument("--next-batch", metavar="BATCH", help="the batch this calibration is meant to clear; an empty value means every problem outside the golden sets")
+    c.add_argument("--tpm-limit", type=int, default=int(os.environ.get("ZTPROOF_TPM_LIMIT") or 0) or None,
+                   help="the account's tokens-per-minute limit for the model, if known")
+    c.add_argument("--summary", action="store_true", help="also append the result to the CI job summary")
     selection(add("run", cmd_run, "all stages in one process, for local use"))
     add("recheck", cmd_recheck, "re-run the gate on every accepted proof in proofs/")
     g = add("gate", cmd_gate, "run the gate on one Lean file by hand")

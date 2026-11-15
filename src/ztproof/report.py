@@ -28,13 +28,20 @@ def _status(run: Run, t: Target) -> tuple[str, dict | None]:
     if not statement["valid"]:
         return "statement invalid (platform-side failure)", None
     verdicts = run.verdicts(t)
+    control = t.step.expect == "not_proved"
     for v in verdicts:
         if v["outcome"] == gate.ACCEPTED:
+            if control:
+                return (f"**ACCEPTED, AND IT MUST NOT BE**: this statement is a negative control, known to be "
+                        f"false (attempt {v['attempt']}). The gate has a hole"), v
             return f"**proved**, attempt {v['attempt']} of {run.meta['max_attempts']}", v
     if run.pending(t) is not None:
         return "reply awaiting verification", None
     if not verdicts:
         return "not attempted", None
+    if control:
+        return (f"not proved after {len(verdicts)} attempt(s), which is the expected result: "
+                "this statement is a negative control, known to be false"), None
     return f"not proved after {len(verdicts)} attempt(s)", None
 
 
@@ -69,6 +76,13 @@ def _run_table(run: Run) -> list[str]:
     ]
     if m.get("batch"):
         out.insert(3, f"| Batch | `{m['batch']['id']}`: {_cell(m['batch']['title'])} |")
+    if m.get("calibration") is not None:
+        out.append("| Kind of run | Stage 0 calibration on a golden set; see `CALIBRATION.md` in this directory |")
+    elif m.get("calibrated_by"):
+        c = m["calibrated_by"]
+        out.append(f"| Stage 0 calibration | GO, run `{c['run_id']}`, configuration `{c['configuration_sha256'][:12]}` |")
+    else:
+        out.append("| Stage 0 calibration | none: this run was not cleared by a calibration |")
     if m.get("ci"):
         out.append(f"| CI | {_cell(json.dumps(m['ci']))} |")
     if m.get("aborted"):

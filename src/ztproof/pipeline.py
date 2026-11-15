@@ -19,6 +19,7 @@ runs Lean; `verify` runs untrusted Lean and never sees the key.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 import subprocess
@@ -36,6 +37,7 @@ REPO_ROOT = lean.REPO_ROOT
 PROBLEMS_DIR = REPO_ROOT / "problems"
 BATCHES_DIR = REPO_ROOT / "batches"
 PROOFS_DIR = REPO_ROOT / "proofs"
+GOLDEN_DIR = REPO_ROOT / "golden"
 RUNS_DIR = REPO_ROOT / "audit" / "runs"
 
 # Outcomes decided before the gate is reached.
@@ -52,6 +54,20 @@ def _now() -> str:
 def _git_sha() -> str:
     out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
     return out.stdout.strip() or os.environ.get("GITHUB_SHA") or "unknown"
+
+
+# What decides how the platform behaves. The audit trail and the proofs are left out
+# on purpose: committing a run must not change the identity of the platform.
+PLATFORM_FILES = ("src", "lean", "prompts", "lean-toolchain", "lakefile.toml", "lake-manifest.json", "pyproject.toml")
+
+
+def platform_tree_sha256() -> str:
+    """One fingerprint for the platform's own code, prompts and pinned toolchain, from Git's index."""
+    out = subprocess.run(["git", "ls-files", "-s", "--", *PLATFORM_FILES], cwd=REPO_ROOT,
+                         capture_output=True, text=True, check=False)
+    if out.returncode != 0 or not out.stdout.strip():
+        return "unknown"
+    return hashlib.sha256(out.stdout.encode()).hexdigest()
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -139,12 +155,16 @@ def existing_proof(t: Target) -> dict | None:
 def init_run(
     *, problems: list[Problem], only: list[str] | None, max_attempts: int, model: str,
     effort: str, run_id: str | None = None, force: bool = False, runs_dir: Path = RUNS_DIR,
-    batch: Batch | None = None,
+    batch: Batch | None = None, calibrated_by: dict | None = None,
 ) -> Run:
     """Create a run directory listing the steps this run will work on.
 
-    A batch restricts the run to its documents; `only` restricts it further.
+    A batch restricts the run to its documents; `only` restricts it further. A
+    golden batch, one with calibration thresholds, is always attempted in full:
+    a calibration that skipped what was proved last time would measure nothing.
     """
+    calibration = batch.calibration if batch is not None else None
+    force = force or calibration is not None
     if batch is not None:
         by_id = {p.id: p for p in problems}
         problems = [by_id[pid] for pid in batch.problems]
@@ -172,6 +192,7 @@ def init_run(
         "started": _now(),
         "platform_version": __version__,
         "git_sha": sha,
+        "platform_tree_sha256": platform_tree_sha256(),
         "prompt_version": PROMPT_VERSION,
         "model": model,
         "effort": effort,
@@ -181,6 +202,11 @@ def init_run(
         "ci": {k: os.environ[k] for k in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKFLOW",
                                           "GITHUB_REF_NAME", "GITHUB_ACTOR") if k in os.environ},
         "batch": {"id": batch.id, "title": batch.title} if batch else None,
+        # Thresholds, copied here when the run is a Stage 0 calibration, so that the
+        # run is judged by the thresholds it started with.
+        "calibration": calibration,
+        # The Stage 0 run that cleared this one, if any.
+        "calibrated_by": calibrated_by,
         "documents": [p.id for p in problems if not only or p.id in only
                       or any(k.startswith(p.id + "/") for k in only)],
         "steps": [t.key for t in selected],
@@ -360,7 +386,8 @@ def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Pa
                 "generation_seconds": round(generation.get("seconds", 0.0), 1),
                 "outcome": verdict.outcome,
                 "reason": verdict.reason,
-                "stages": [{"name": s.name, "passed": s.passed, "seconds": round(s.seconds, 2)} for s in verdict.stages],
+                "stages": [{"name": s.name, "passed": s.passed, "seconds": round(s.seconds, 2),
+                            "max_rss_mb": s.max_rss_mb} for s in verdict.stages],
                 "axioms": (verdict.facts or {}).get("axioms"),
                 "attempt_sha256": verdict.attempt_sha256,
                 "statement_sha256": verdict.statement_sha256,
@@ -368,7 +395,9 @@ def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Pa
                 "mathlib": verdict.mathlib,
                 "path": str(directory.relative_to(run.path)),
             }, ensure_ascii=False) + "\n")
-        if verdict.accepted:
+        # A calibration run files nothing: the golden set has its reference proofs
+        # under golden/, and proofs/ is for results, not for canaries.
+        if verdict.accepted and run.meta.get("calibration") is None:
             target = proofs_dir / t.problem.id
             target.mkdir(parents=True, exist_ok=True)
             (target / f"{t.step.id}.lean").write_text(body, encoding="utf-8")
