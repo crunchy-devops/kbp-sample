@@ -23,7 +23,7 @@ There is no context map and no retrieval step. A prompt is built from the pinned
 
 | Stage | Where | Trusted? |
 | --- | --- | --- |
-| Problem and Lean statement | `problems/<id>/problem.toml` | Written and reviewed by people. The one input the kernel cannot check |
+| Document, claims and Lean statements | `problems/<id>/problem.toml`, `batches/` | Written and reviewed by people. The one input the kernel cannot check |
 | Prompt | `prompts/v1/`, `src/ztproof/prompt.py` | Versioned text, fingerprinted in every record |
 | Model call | `src/ztproof/generator.py` | No. The reply is an untrusted input |
 | Gate | `lean/Gate.lean`, `src/ztproof/gate.py` | Yes, and it is short enough to read in one sitting |
@@ -70,15 +70,30 @@ Two workflows, in `.github/workflows/`.
 
 **CI** runs on every push and needs no secret. It runs the gate's test suite, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
 
-**Prove** runs when a problem or a prompt changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow starts a run, alternates "ask the model" and "verify in Lean" for up to five rounds, commits the run to `audit/runs/` and any accepted proof to `proofs/`, and prints the referee report as the job summary.
+**Prove** runs when a problem, a batch or a prompt changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow starts a run for the batch it was given, alternates "ask the model" and "verify in Lean" for up to five rounds, commits the run to `audit/runs/` and any accepted proof to `proofs/`, and prints the referee report as the job summary.
 
 The key and the untrusted Lean code never share a step. Steps that ask the model hold the key and run no Lean; steps that verify run Lean and hold no key. This is why the rounds are written out one by one in the workflow, which is less elegant than a loop and rather the point.
 
 The model defaults to `claude-opus-5-5` at effort `high`. Set the repository variables `ZTPROOF_MODEL` and `ZTPROOF_EFFORT` to change either. If the model declines a request on policy grounds, the API may answer with a fallback model; the record then shows both the model asked and the model that answered.
 
+## Documents, claims and batches
+
+The unit of work is a batch of documents. A document is a preprint, an exercise or a note; its claims are the steps we pin for it; and a batch is a named list of documents in `batches/`, run together.
+
+```bash
+ztproof batches                       # what is in each batch, and how far it is formalised
+ztproof run --batch worked-case --jobs 4
+```
+
+One run asks the model about several claims at once and checks several replies at once. The trail is still written in a fixed order, and every document comes out with its own referee report next to a summary for the batch.
+
+A document is described precisely enough to be found again: for a preprint, its arXiv identifier and the version that was read, since version 2 of a paper is another document; for any file, its SHA-256. Each claim can carry a locator such as "Theorem 1.2, page 3".
+
+The platform does not read preprints yet. Claims and Lean statements are pinned by hand, and a claim nobody pinned is a claim nobody checked. The reports say so.
+
 ## Problems
 
-A problem is one TOML file. Each step is one link of the chain: an informal claim, and a Lean statement with a name for who formalised it and who reviewed it. A step without a Lean statement is listed and never sent to a model.
+A problem is one TOML file, one per document. Each step is one link of the chain: an informal claim, and a Lean statement with a name for who formalised it and who reviewed it. A step without a Lean statement is listed and never sent to a model.
 
 Formulas in the informal text use the manuscript's convention, a code span followed by a dollar sign, as in `n^2`$.
 
@@ -93,7 +108,7 @@ Two problems are pinned today.
 
 `audit/README.md` describes the layout and every outcome. In short: for each attempt we keep the exact prompt, the exact reply, the Lean text, Lean's messages, each gate stage with its duration, the axioms found, the versions of Lean and Mathlib, and SHA-256 fingerprints of the statement and of the checked file.
 
-Each run also gets `REPORT.md`, written for a reader who trusts neither the model nor us. For every step it gives the claim, the pinned statement, who reviewed it, the evidence for acceptance check by check, the history of attempts, and a closing section on what the run did not establish.
+Each run also gets `REPORT.md`, written for a reader who trusts neither the model nor us. It opens with a summary by document: claims pinned, proved, attempted and not proved, without a Lean statement, and how many statements no human has reviewed. Then, for every claim, it gives the informal text and where it sits in the document, the pinned statement, who reviewed it, the evidence for acceptance check by check, the history of attempts, and a closing section on what the run did not establish. Each document has the same report on its own, in `<run>/<document>/REPORT.md`.
 
 ## What we still do not trust
 

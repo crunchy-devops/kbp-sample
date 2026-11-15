@@ -1,0 +1,4 @@
+# The plumbing check: cheap, quick, and nobody's research.
+id = "smoke"
+title = "Platform smoke test"
+problems = ["smoke"]

@@ -12,9 +12,9 @@ from ztproof import gate
 from ztproof.generator import Generation
 from ztproof.pipeline import (GENERATION_FAILED, PROTOCOL_VIOLATION, check_statements, generate_round,
                               init_run, recheck_proofs, verify_round)
-from ztproof.problem import load_problem
+from ztproof.problem import Batch, load_problem
 from ztproof.prompt import Prompt
-from ztproof.report import render
+from ztproof.report import render, render_document
 
 
 class Scripted:
@@ -118,3 +118,57 @@ def test_unformalised_steps_are_listed_not_attempted(fixtures: Path, tmp_path: P
                    run_id="r", runs_dir=tmp_path / "runs")
     assert "gatecheck/not_yet" in run.meta["skipped"]
     assert "gatecheck/not_yet" not in run.meta["steps"]
+
+
+@needs_lean
+def test_a_batch_runs_in_parallel_and_reports_per_document(fixtures: Path, tmp_path: Path):
+    core = load_problem(fixtures / "problems" / "gatecheck")
+    meta = load_problem(fixtures / "problems" / "gatecheck-meta")
+    batch = Batch(id="two-documents", title="Two documents", problems=("gatecheck", "gatecheck-meta"))
+    run = init_run(problems=[meta, core], only=None, max_attempts=1, model="scripted-test-double", effort="n/a",
+                   run_id="batch-run", runs_dir=tmp_path / "runs", batch=batch)
+    assert run.meta["documents"] == ["gatecheck", "gatecheck-meta"]   # the batch's order, not the caller's
+    assert [t.key for t in run.targets] == ["gatecheck/sum_odds", "gatecheck/add_comm", "gatecheck/big_decide",
+                                             "gatecheck-meta/false_claim"]
+    check_statements(run)
+
+    class ByTheorem:
+        """Answers by looking at which theorem the prompt asks for, so the order of calls does not matter."""
+        model = "scripted-test-double"
+        replies = {"sum_odds_eq_sq": "honest", "nat_add_comm'": "honest_with_lemma",
+                   "count_check": "native_decide", "false_claim": "kernel_bypass"}
+
+        def generate(self, prompt):
+            name = next(k for k in self.replies if f"theorem {k} " in prompt.user)
+            return Generation(text=fenced(fixtures, self.replies[name]), model_requested=self.model,
+                              model_served=self.model, stop_reason="end_turn")
+
+    assert generate_round(run, ByTheorem(), jobs=4) == 4
+    assert verify_round(run, proofs_dir=tmp_path / "proofs", jobs=4) == 4
+    outcomes = {t.key: run.verdicts(t)[0]["outcome"] for t in run.targets}
+    assert outcomes == {"gatecheck/sum_odds": gate.ACCEPTED, "gatecheck/add_comm": gate.ACCEPTED,
+                        "gatecheck/big_decide": gate.FORBIDDEN_AXIOM, "gatecheck-meta/false_claim": gate.REPLAY_FAILED}
+
+    # the trail is written in the run's step order whatever finished first
+    lines = [json.loads(l) for l in (run.path / "attempts.jsonl").read_text().splitlines()]
+    assert [f"{l['problem']}/{l['step']}" for l in lines] == [t.key for t in run.targets]
+    assert {l["batch"] for l in lines} == {"two-documents"}
+
+    summary = render(run)
+    assert "| `gatecheck` Gate self-test, core Lean | note | 4 | 2 | 1 | 1 | 0 | 3 |" in summary
+    assert "| `gatecheck-meta` Gate self-test, metaprogramming in scope | note | 1 | 0 | 1 | 0 | 0 | 1 |" in summary
+    document = render_document(run, core)
+    assert "Of 4 claim(s) pinned for this document: 2 proved, 1 attempted and not proved, 1 without a Lean statement" in document
+    assert "false_claim" not in document
+
+
+@needs_lean
+def test_a_broken_key_is_recorded_once_even_in_parallel(fixtures: Path, tmp_path: Path):
+    core = load_problem(fixtures / "problems" / "gatecheck")
+    run = init_run(problems=[core], only=None, max_attempts=2, model="m", effort="e",
+                   run_id="broken", runs_dir=tmp_path / "runs")
+    check_statements(run)
+    broken = Generation(text="", model_requested="m", error="authentication failed: invalid x-api-key")
+    assert generate_round(run, Scripted([broken, broken, broken]), jobs=3) == 1
+    assert sum(len(run.attempt_dirs(t)) for t in run.targets) == 1
+    assert run.open_steps() == []

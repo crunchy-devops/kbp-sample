@@ -23,16 +23,18 @@ import json
 import os
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__, gate, lean
 from .generator import Generation, Generator
-from .problem import Problem, Step, load_all
+from .problem import Batch, Problem, Step, load_all
 from .prompt import PROMPT_VERSION, Previous, ProtocolViolation, build_prompt, extract_lean
 
 REPO_ROOT = lean.REPO_ROOT
 PROBLEMS_DIR = REPO_ROOT / "problems"
+BATCHES_DIR = REPO_ROOT / "batches"
 PROOFS_DIR = REPO_ROOT / "proofs"
 RUNS_DIR = REPO_ROOT / "audit" / "runs"
 
@@ -76,6 +78,7 @@ class Run:
         self.path = path
         self.meta = _read_json(path / "run.json")
         by_id = {p.id: p for p in (problems if problems is not None else load_all(PROBLEMS_DIR))}
+        self.documents = [by_id[pid] for pid in self.meta.get("documents", []) if pid in by_id]
         self.targets = [
             Target(by_id[pid], by_id[pid].step(sid))
             for pid, sid in (key.split("/") for key in self.meta["steps"])
@@ -136,8 +139,15 @@ def existing_proof(t: Target) -> dict | None:
 def init_run(
     *, problems: list[Problem], only: list[str] | None, max_attempts: int, model: str,
     effort: str, run_id: str | None = None, force: bool = False, runs_dir: Path = RUNS_DIR,
+    batch: Batch | None = None,
 ) -> Run:
-    """Create a run directory listing the steps this run will work on."""
+    """Create a run directory listing the steps this run will work on.
+
+    A batch restricts the run to its documents; `only` restricts it further.
+    """
+    if batch is not None:
+        by_id = {p.id: p for p in problems}
+        problems = [by_id[pid] for pid in batch.problems]
     selected: list[Target] = []
     skipped: dict[str, str] = {}
     for p in problems:
@@ -170,6 +180,9 @@ def init_run(
         "mathlib": None,
         "ci": {k: os.environ[k] for k in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKFLOW",
                                           "GITHUB_REF_NAME", "GITHUB_ACTOR") if k in os.environ},
+        "batch": {"id": batch.id, "title": batch.title} if batch else None,
+        "documents": [p.id for p in problems if not only or p.id in only
+                      or any(k.startswith(p.id + "/") for k in only)],
         "steps": [t.key for t in selected],
         "skipped": skipped,
     })
@@ -197,6 +210,8 @@ def check_statements(run: Run, config: gate.GateConfig | None = None) -> bool:
             "signature": t.step.signature,
             "formalised_by": t.step.formalised_by,
             "reviewed_by": t.step.reviewed_by,
+            "document": t.problem.document.cite(),
+            "locator": t.step.locator,
         })
         all_valid = all_valid and stage.passed
     return all_valid
@@ -224,9 +239,18 @@ def _libraries(problem: Problem, run: Run) -> str:
     return text
 
 
-def generate_round(run: Run, generator: Generator) -> int:
-    """Ask the model once for every step that still wants an attempt. Runs no Lean."""
-    made = 0
+def _infrastructure_failure(generation: Generation) -> bool:
+    return bool(generation.error) and generation.stop_reason not in ("refusal", "max_tokens")
+
+
+def generate_round(run: Run, generator: Generator, jobs: int = 1) -> int:
+    """Ask the model once for every step that still wants an attempt. Runs no Lean.
+
+    With `jobs` above one the requests go out in parallel, which is what makes a
+    batch of documents practical. The first request always goes alone: if the key
+    or the network is broken we want one record of it, not one per step.
+    """
+    prepared: list[tuple[Target, Path, object]] = []
     for t in run.open_steps():
         number = len(run.attempt_dirs(t)) + 1
         directory = run.step_dir(t) / f"attempt-{number:02d}"
@@ -238,19 +262,35 @@ def generate_round(run: Run, generator: Generator) -> int:
         directory.mkdir(parents=True)
         (directory / "prompt.md").write_text(
             f"<!-- system prompt -->\n{prompt.system}\n\n<!-- user prompt -->\n{prompt.user}", encoding="utf-8")
-        generation = generator.generate(prompt)
+        prepared.append((t, directory, prompt))
+
+    def record(t: Target, directory: Path, prompt, generation: Generation) -> None:
         (directory / "reply.md").write_text(generation.text, encoding="utf-8")
-        record = generation.to_json()
-        del record["text"]
-        record.update(prompt_version=prompt.version, prompt_sha256=prompt.sha256, generated=_now())
-        _write_json(directory / "generation.json", record)
-        made += 1
-        if generation.error and generation.stop_reason not in ("refusal", "max_tokens"):
-            # Authentication, quota, network: asking again for the other steps would
-            # only fill the trail with the same infrastructure failure.
+        data = generation.to_json()
+        del data["text"]
+        data.update(prompt_version=prompt.version, prompt_sha256=prompt.sha256, generated=_now())
+        _write_json(directory / "generation.json", data)
+        if _infrastructure_failure(generation) and not run.meta.get("aborted"):
+            # Authentication, quota, network: asking again would only fill the
+            # trail with the same infrastructure failure.
             run.meta["aborted"] = f"generation stopped at {t.key}: {generation.error}"
             run.save_meta()
-            break
+
+    made = 0
+    if prepared:
+        t, directory, prompt = prepared[0]
+        record(t, directory, prompt, generator.generate(prompt))
+        made = 1
+    rest = prepared[1:] if not run.meta.get("aborted") else []
+    with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+        generations = list(pool.map(lambda item: generator.generate(item[2]), rest))
+    for (t, directory, prompt), generation in zip(rest, generations):
+        record(t, directory, prompt, generation)
+        made += 1
+    # A prompt prepared but never sent would otherwise count as an attempt.
+    for _, directory, _ in prepared[made:]:
+        (directory / "prompt.md").unlink()
+        directory.rmdir()
     return made
 
 
@@ -265,13 +305,18 @@ def _pre_gate_verdict(generation: dict, reply: str) -> tuple[gate.Verdict | None
         return gate.Verdict(outcome=PROTOCOL_VIOLATION, reason=str(exc)), ""
 
 
-def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Path = PROOFS_DIR) -> int:
-    """Put every unverified reply through the gate and record the verdict."""
-    checked = 0
-    for t in run.targets:
-        directory = run.pending(t)
-        if directory is None:
-            continue
+def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Path = PROOFS_DIR,
+                 jobs: int = 1) -> int:
+    """Put every unverified reply through the gate and record the verdict.
+
+    The gate runs for several attempts at once when `jobs` allows; the records are
+    always written in the run's own step order, so the trail does not depend on
+    which Lean process happened to finish first.
+    """
+    pending = [(t, d) for t in run.targets if (d := run.pending(t)) is not None]
+
+    def judge(item: tuple[Target, Path]) -> tuple[dict, gate.Verdict, str]:
+        t, directory = item
         generation = _read_json(directory / "generation.json")
         reply = (directory / "reply.md").read_text(encoding="utf-8")
         verdict, body = _pre_gate_verdict(generation, reply)
@@ -279,6 +324,13 @@ def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Pa
             (directory / "attempt.lean").write_text(body, encoding="utf-8")
             with tempfile.TemporaryDirectory(prefix="ztproof-") as tmp:
                 verdict = gate.check_attempt(t.problem, t.step, body, Path(tmp), config)
+        return generation, verdict, body
+
+    with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+        judged = list(pool.map(judge, pending))
+
+    checked = 0
+    for (t, directory), (generation, verdict, body) in zip(pending, judged):
         number = int(directory.name.split("-")[1])
         data = verdict.to_json()
         data.update(problem=t.problem.id, step=t.step.id, attempt=number, verified=_now())
@@ -290,8 +342,11 @@ def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Pa
                 "platform_version": run.meta["platform_version"],
                 "git_sha": run.meta["git_sha"],
                 "verified": data["verified"],
+                "batch": (run.meta.get("batch") or {}).get("id"),
                 "problem": t.problem.id,
+                "document": t.problem.document.cite(),
                 "step": t.step.id,
+                "locator": t.step.locator,
                 "attempt": number,
                 "max_attempts": run.meta["max_attempts"],
                 "prompt_version": generation.get("prompt_version"),

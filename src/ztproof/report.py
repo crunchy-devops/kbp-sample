@@ -10,6 +10,7 @@ import json
 
 from . import gate
 from .pipeline import Run, Target
+from .problem import Problem
 
 STAGE_TOOL = {
     "statement": "`lean` elaborates the pinned statement, written by the platform",
@@ -41,18 +42,23 @@ def _cell(text: str) -> str:
     return " ".join(str(text).split()).replace("|", "\\|")
 
 
-def render(run: Run) -> str:
+CAVEATS = [
+    "## What this report does not establish", "",
+    "* That a Lean statement faithfully expresses the informal claim. That is a human judgement, recorded above as the reviewer.",
+    "* That the hypotheses of a statement are true. A step proved under hypotheses is an implication, no more.",
+    "* That the claims listed are all the claims of the document. A claim nobody pinned was not examined.",
+    "* That Lean's kernel, the compiler that built it, or the machine it ran on are free of defects.",
+    "* Anything about steps listed as not proved, not attempted or skipped. A failure to prove is not a disproof.",
+    "",
+]
+
+
+def _run_table(run: Run) -> list[str]:
     m = run.meta
-    out: list[str] = [
-        f"# Referee report for run {m['run_id']}",
-        "",
-        "This report is generated from the files in this directory. It states what was checked, by which tool, "
-        "and what was not checked. Nothing in it comes from a model's description of its own work.",
-        "",
-        "## The run",
-        "",
+    out = [
         "| Item | Value |",
         "| --- | --- |",
+        f"| Run | `{m['run_id']}` |",
         f"| Started (UTC) | {m['started']} |",
         f"| Platform | ztproof {m['platform_version']}, commit `{m['git_sha'][:12]}` |",
         f"| Model asked | `{m['model']}`, effort `{m['effort']}` |",
@@ -61,34 +67,79 @@ def render(run: Run) -> str:
         f"| Mathlib | {m.get('mathlib') or 'not used'} |",
         f"| Attempts allowed per step | {m['max_attempts']} |",
     ]
+    if m.get("batch"):
+        out.insert(3, f"| Batch | `{m['batch']['id']}`: {_cell(m['batch']['title'])} |")
     if m.get("ci"):
         out.append(f"| CI | {_cell(json.dumps(m['ci']))} |")
     if m.get("aborted"):
         out += ["", f"W> The run was cut short: {m['aborted']}"]
+    return out
 
-    out += ["", "## Summary", "", "| Step | Result |", "| --- | --- |"]
-    for t in run.targets:
-        out.append(f"| `{t.key}` {_cell(t.step.part)} | {_status(run, t)[0]} |")
-    for key, why in m.get("skipped", {}).items():
-        out.append(f"| `{key}` | skipped: {why} |")
 
-    for t in run.targets:
+def _tally(run: Run, problem: Problem) -> dict[str, int]:
+    """Counts for one document. Every claim pinned for it falls in exactly one column."""
+    counts = {"claims": len(problem.steps), "proved": 0, "not_proved": 0, "not_formalised": 0,
+              "other": 0, "unreviewed": 0}
+    targets = {t.step.id: t for t in run.targets if t.problem.id == problem.id}
+    for step in problem.steps:
+        if step.formalised and not step.reviewed_by:
+            counts["unreviewed"] += 1
+        t = targets.get(step.id)
+        if not step.formalised:
+            counts["not_formalised"] += 1
+        elif t is None:
+            counts["other"] += 1        # skipped: proved in an earlier run, or outside this run's selection
+        elif _status(run, t)[1] is not None:
+            counts["proved"] += 1
+        elif run.verdicts(t):
+            counts["not_proved"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def _source_lines(problem: Problem) -> list[str]:
+    d = problem.document
+    out = [f"* Source: {problem.source}"]
+    if d.arxiv:
+        out.append(f"* arXiv: [{d.arxiv}{d.version}](https://arxiv.org/abs/{d.arxiv}{d.version})"
+                   + (f", {d.authors}" if d.authors else ""))
+    elif d.authors:
+        out.append(f"* Authors: {d.authors}")
+    if d.url:
+        out.append(f"* Link: {d.url}")
+    if d.pdf_sha256:
+        out.append(f"* File the claims were read from, SHA-256: `{d.pdf_sha256}`")
+    return out
+
+
+def _step_sections(run: Run, problem: Problem, level: str) -> list[str]:
+    out: list[str] = []
+    targets = {t.step.id: t for t in run.targets if t.problem.id == problem.id}
+    for step in problem.steps:
+        key = f"{problem.id}/{step.id}"
+        title = f"{level} `{key}` {step.part}".rstrip()
+        where = f" Location in the document: {step.locator}." if step.locator else ""
+        t = targets.get(step.id)
+        if t is None:
+            why = run.meta.get("skipped", {}).get(key, "outside this run's selection")
+            out += ["", title, "", f"Result: not examined in this run ({why}).{where}", "", step.informal]
+            continue
         status, accepted = _status(run, t)
         statement = run.statement(t) or {}
         out += [
-            "", f"## `{t.key}` {t.step.part}".rstrip(), "",
-            f"Result: {status}.", "",
-            "### The claim", "",
-            t.step.informal, "",
+            "", title, "",
+            f"Result: {status}.{where}", "",
+            "**The claim.** " + step.informal, "",
             "Pinned Lean statement:", "",
             "```lean",
-            f"theorem {t.step.theorem} {t.step.signature}",
+            f"theorem {step.theorem} {step.signature}",
             "```", "",
-            f"* Formalised by: {t.step.formalised_by}",
-            f"* Reviewed by: {t.step.reviewed_by or 'nobody yet'}",
+            f"* Formalised by: {step.formalised_by}",
+            f"* Reviewed by: {step.reviewed_by or 'nobody yet'}",
             f"* Statement fingerprint (SHA-256): `{statement.get('statement_sha256', 'n/a')}`",
         ]
-        if not t.step.reviewed_by:
+        if not step.reviewed_by:
             out += ["", "W> No human has reviewed this Lean statement. The kernel checks that a proof matches the "
                     "statement; it cannot check that the statement says what the mathematics means."]
         if statement and not statement.get("valid"):
@@ -96,7 +147,7 @@ def render(run: Run) -> str:
                     statement.get("detail", ""), "```"]
         if accepted:
             facts = accepted.get("facts") or {}
-            out += ["", "### Evidence for acceptance", "", "| Check | Tool and criterion | Result | Seconds |",
+            out += ["", "**Evidence for acceptance.**", "", "| Check | Tool and criterion | Result | Seconds |",
                     "| --- | --- | --- | --- |"]
             for s in accepted["stages"]:
                 out.append(f"| {s['name']} | {STAGE_TOOL.get(s['name'], '')} | "
@@ -104,23 +155,60 @@ def render(run: Run) -> str:
             out += [
                 "",
                 f"* Axioms the proof depends on: {', '.join(f'`{a}`' for a in facts.get('axioms', [])) or 'none'}",
-                f"* Proof text: `proofs/{t.problem.id}/{t.step.id}.lean`, SHA-256 of the checked file `{accepted['attempt_sha256']}`",
+                f"* Proof text: `proofs/{problem.id}/{step.id}.lean`, SHA-256 of the checked file `{accepted['attempt_sha256']}`",
                 f"* Checked with: {accepted['lean_version']}" + (f", Mathlib {accepted['mathlib']}" if accepted.get("mathlib") else ""),
                 "* To check it again yourself: `ztproof recheck`",
             ]
         verdicts = run.verdicts(t)
         if verdicts:
-            out += ["", "### Attempt history", "", "| Attempt | Outcome | Reason | Files |", "| --- | --- | --- | --- |"]
+            out += ["", "**Attempt history.**", "", "| Attempt | Outcome | Reason | Files |", "| --- | --- | --- | --- |"]
             for v in verdicts:
                 out.append(f"| {v['attempt']} | `{v['outcome']}` | {_cell(v['reason'])[:300]} | "
-                           f"`{t.problem.id}/{t.step.id}/attempt-{v['attempt']:02d}/` |")
+                           f"`{problem.id}/{step.id}/attempt-{v['attempt']:02d}/` |")
+    return out
 
-    out += [
-        "", "## What this report does not establish", "",
-        "* That a Lean statement faithfully expresses the informal claim. That is a human judgement, recorded above as the reviewer.",
-        "* That the hypotheses of a statement are true. A step proved under hypotheses is an implication, no more.",
-        "* That Lean's kernel, the compiler that built it, or the machine it ran on are free of defects.",
-        "* Anything about steps listed as not proved, not attempted or skipped. A failure to prove is not a disproof.",
-        "",
+
+def render_document(run: Run, problem: Problem) -> str:
+    """The referee report for one document of the run."""
+    c = _tally(run, problem)
+    out = [
+        f"# Referee report: {problem.title}", "",
+        "This report is generated from the files of one run. It states what was checked, by which tool, "
+        "and what was not checked. Nothing in it comes from a model's description of its own work.", "",
+        "## The document", "",
+        *_source_lines(problem), "",
+        f"Of {c['claims']} claim(s) pinned for this document: {c['proved']} proved, {c['not_proved']} attempted and "
+        f"not proved, {c['not_formalised']} without a Lean statement, {c['other']} not examined in this run. "
+        f"{c['unreviewed']} Lean statement(s) have not been reviewed by a human.", "",
+        "## The run", "",
+        *_run_table(run), "",
+        "## The claims",
+        *_step_sections(run, problem, "###"), "",
+        *CAVEATS,
     ]
+    return "\n".join(out)
+
+
+def render(run: Run) -> str:
+    """The report for the whole run: a summary across documents, then each document."""
+    m = run.meta
+    out: list[str] = [
+        f"# Referee report for run {m['run_id']}", "",
+        "This report is generated from the files in this directory. It states what was checked, by which tool, "
+        "and what was not checked. Nothing in it comes from a model's description of its own work.", "",
+        "## The run", "",
+        *_run_table(run), "",
+        "## Summary by document", "",
+        "| Document | Source | Claims | Proved | Not proved | No Lean statement | Not examined | Statements unreviewed |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for problem in run.documents:
+        c = _tally(run, problem)
+        out.append(f"| `{problem.id}` {_cell(problem.title)} | {_cell(problem.document.cite())} | {c['claims']} | "
+                   f"{c['proved']} | {c['not_proved']} | {c['not_formalised']} | {c['other']} | {c['unreviewed']} |")
+    out += ["", "Each document also has its own report, `<document>/REPORT.md`, in this directory."]
+    for problem in run.documents:
+        out += ["", f"## `{problem.id}`: {problem.title}", "", *_source_lines(problem),
+                *_step_sections(run, problem, "###")]
+    out += ["", *CAVEATS]
     return "\n".join(out)

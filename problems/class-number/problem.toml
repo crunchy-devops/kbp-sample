@@ -31,8 +31,14 @@ Facts that may be assumed without proof:
 3. The fact that `\\chi_{-p}`$, the Kronecker character of `K`$, is equal to `\\left(\\frac{\\cdot}{p}\\right)`$.
 """
 
+[document]
+kind = "exercise"
+authors = "supplied by the author of the book; no author is named on the sheet"
+pdf_sha256 = "ee1e4054a2bd0e6636dee60b429992a52f109a85acdcdf05cd9b69f0fcef6af3"
+
 [[steps]]
 id = "a1_chi_odd"
+locator = "page 1, question (a), first sentence"
 part = "(a), first claim"
 informal = "Show that `\\chi`$ is odd, that is `\\chi(-1) = -1`$."
 theorem = "chi_neg_one"
@@ -42,16 +48,19 @@ reviewed_by = ""
 
 [[steps]]
 id = "a2_twisted_sum"
+locator = "page 1, question (a), displayed formula"
 part = "(a), second claim"
 informal = "Show that for every integer `n`$, `\\chi(n)\\, \\tau(\\bar{\\chi}) = \\sum_{a=1}^{p-1} \\bar{\\chi}(a)\\, e(an/p)`$."
 
 [[steps]]
 id = "a3_gauss_product"
+locator = "page 1, question (a), last sentence"
 part = "(a), deduction"
 informal = "Deduce that `\\tau(\\chi)\\, \\tau(\\bar{\\chi}) = \\chi(-1)\\, p = -p`$."
 
 [[steps]]
 id = "b_l_value"
+locator = "page 1, question (b)"
 part = "(b)"
 informal = """
 Prove that `L(1, \\chi) = \\sum_{n \\ge 1} \\frac{\\chi(n)}{n} = -\\frac{\\pi}{p^{3/2}} \\sum_{a=1}^{p-1} a\\, \\chi(a)`$.
@@ -61,11 +70,13 @@ Justify every interchange of limits. In particular, explain why `\\sum_{n \\ge 1
 
 [[steps]]
 id = "c_class_number"
+locator = "page 1, question (c)"
 part = "(c)"
 informal = "Deduce Dirichlet's class number formula `h(-p) = -\\frac{1}{p} \\sum_{a=1}^{p-1} a\\, \\chi(a)`$."
 
 [[steps]]
 id = "d1_half_sum"
+locator = "page 1, question (d), displayed formula"
 part = "(d), formula"
 informal = """
 Let `A = \\sum_{0 < a < p/2} \\chi(a)`$, which is the number of quadratic residues minus the number of
@@ -75,15 +86,18 @@ non-residues in the interval `(0, p/2)`$. Prove that `h(-p) = \\frac{A}{2 - \\ch
 
 [[steps]]
 id = "d2_excess_positive"
+locator = "page 1, question (d), last sentence"
 part = "(d), conclusion"
 informal = "Conclude that `A > 0`$: in `(0, p/2)`$ there are strictly more quadratic residues than non-residues modulo `p`$."
 
 [[steps]]
 id = "e1_check_23_47"
+locator = "page 1, question (e), first sentence"
 part = "(e), computation"
 informal = "Use both formulas to compute `h(-23)`$ and `h(-47)`$, and confirm that they agree."
 
 [[steps]]
 id = "e2_p_equals_3"
+locator = "page 1, question (e), last sentence"
 part = "(e), the case p = 3"
 informal = "Explain why the formula in (c) needs a correction when `p = 3`$."

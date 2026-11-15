@@ -28,6 +28,9 @@ def residueExcess (p : Nat) : Int :=
   ((List.range ((p - 1) / 2)).map fun i => if isQR p (i + 1) then (1 : Int) else -1).sum
 """
 
+[document]
+kind = "note"
+
 [[steps]]
 id = "sum_odds"
 part = "(1)"

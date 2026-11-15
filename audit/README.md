@@ -8,9 +8,10 @@ Only real model runs are recorded. The test suite uses a scripted stand-in for t
 
 ```text
 audit/runs/<run id>/
-  run.json              platform version, commit, model, prompt version, toolchain, steps
+  run.json              platform version, commit, batch, model, prompt version, toolchain, steps
   attempts.jsonl        one line per verified attempt, in order
-  REPORT.md             the referee report, generated from the files below
+  REPORT.md             the referee report for the run, with a summary by document
+  <problem>/REPORT.md   the referee report for one document
   <problem>/<step>/
     statement.json      does the pinned statement elaborate, who formalised and reviewed it
     attempt-NN/

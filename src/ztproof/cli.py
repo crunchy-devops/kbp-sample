@@ -10,10 +10,10 @@ from pathlib import Path
 
 from . import __version__, gate, lean
 from .generator import DEFAULT_EFFORT, DEFAULT_MODEL
-from .pipeline import (PROBLEMS_DIR, Run, check_statements, generate_round, init_run,
+from .pipeline import (BATCHES_DIR, PROBLEMS_DIR, Run, check_statements, generate_round, init_run,
                        recheck_proofs, verify_round)
-from .problem import ProblemError, load_all, load_problem
-from .report import render
+from .problem import Batch, ProblemError, load_all, load_batches, load_problem
+from .report import render, render_document
 
 
 def _config(args: argparse.Namespace) -> gate.GateConfig:
@@ -27,10 +27,42 @@ def _run(args: argparse.Namespace) -> Run:
 def _write_report(run: Run, *, summary: bool = False) -> None:
     text = render(run)
     (run.path / "REPORT.md").write_text(text, encoding="utf-8")
+    for problem in run.documents:
+        target = run.path / problem.id
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "REPORT.md").write_text(render_document(run, problem), encoding="utf-8")
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY") if summary else None
     if summary_file:
         with open(summary_file, "a", encoding="utf-8") as fh:
             fh.write(text + "\n")
+
+
+def _batch(args: argparse.Namespace, problems: list) -> Batch | None:
+    if not args.batch:
+        return None
+    for batch in load_batches(BATCHES_DIR, {p.id for p in problems}):
+        if batch.id == args.batch:
+            return batch
+    raise ProblemError(f"no batch named {args.batch!r} in batches/")
+
+
+def _start(args: argparse.Namespace) -> Run:
+    problems = load_all(PROBLEMS_DIR)
+    return init_run(
+        problems=problems, only=args.only or None, max_attempts=args.max_attempts, model=args.model,
+        effort=args.effort, run_id=args.run_id, force=args.force, batch=_batch(args, problems),
+    )
+
+
+def cmd_batches(args: argparse.Namespace) -> int:
+    problems = {p.id: p for p in load_all(PROBLEMS_DIR)}
+    for batch in load_batches(BATCHES_DIR, set(problems)):
+        print(f"{batch.id}: {batch.title}")
+        for pid in batch.problems:
+            p = problems[pid]
+            ready = sum(1 for s in p.steps if s.formalised)
+            print(f"  {pid:20} {p.document.cite():24} {ready} of {len(p.steps)} claims have a Lean statement")
+    return 0
 
 
 def cmd_problems(args: argparse.Namespace) -> int:
@@ -61,10 +93,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    run = init_run(
-        problems=load_all(PROBLEMS_DIR), only=args.only or None, max_attempts=args.max_attempts,
-        model=args.model, effort=args.effort, run_id=args.run_id, force=args.force,
-    )
+    run = _start(args)
     print(run.path)
     return 0
 
@@ -86,7 +115,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     if not run.open_steps():
         print("nothing to generate")
         return 0
-    made = generate_round(run, AnthropicGenerator(run.meta["model"], run.meta["effort"]))
+    made = generate_round(run, AnthropicGenerator(run.meta["model"], run.meta["effort"]), jobs=args.jobs)
     print(f"{made} repl{'y' if made == 1 else 'ies'} recorded")
     if run.meta.get("aborted"):
         print(run.meta["aborted"], file=sys.stderr)
@@ -95,7 +124,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     run = _run(args)
-    checked = verify_round(run, _config(args))
+    checked = verify_round(run, _config(args), jobs=args.jobs)
     for t in run.targets:
         verdicts = run.verdicts(t)
         if verdicts:
@@ -122,16 +151,13 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     from .generator import AnthropicGenerator
 
-    run = init_run(
-        problems=load_all(PROBLEMS_DIR), only=args.only or None, max_attempts=args.max_attempts,
-        model=args.model, effort=args.effort, run_id=args.run_id, force=args.force,
-    )
+    run = _start(args)
     print(f"run directory: {run.path}")
     check_statements(run, _config(args))
     generator = AnthropicGenerator(run.meta["model"], run.meta["effort"])
     while run.open_steps():
-        generate_round(run, generator)
-        verify_round(run, _config(args))
+        generate_round(run, generator, jobs=args.jobs)
+        verify_round(run, _config(args), jobs=args.jobs)
     _write_report(run)
     print(render(run))
     return 0
@@ -166,9 +192,12 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=help_)
         p.set_defaults(func=func)
         p.add_argument("--timeout", type=float, default=600.0, help="seconds allowed per Lean invocation")
+        p.add_argument("--jobs", type=int, default=int(os.environ.get("ZTPROOF_JOBS") or 1),
+                       help="model requests, or Lean checks, to run at the same time")
         return p
 
     def selection(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--batch", help="run the documents listed in batches/<BATCH>.toml")
         p.add_argument("--only", action="append", metavar="PROBLEM[/STEP]", help="restrict the run; repeatable")
         p.add_argument("--max-attempts", type=int, default=3)
         p.add_argument("--model", default=os.environ.get("ZTPROOF_MODEL") or DEFAULT_MODEL)
@@ -177,6 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--force", action="store_true", help="also attempt steps that already have an accepted proof")
 
     add("problems", cmd_problems, "list the pinned problems and their steps")
+    add("batches", cmd_batches, "list the batches and how far each document is formalised")
     add("check", cmd_check, "check that every pinned statement elaborates")
     selection(add("init", cmd_init, "create a run directory and print its path"))
     for name, func, help_ in (

@@ -16,6 +16,7 @@ from pathlib import Path
 
 CORE_MODULES = {"Init", "Std", "Lean"}
 _ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+_ARXIV = re.compile(r"^([0-9]{4}\.[0-9]{4,5}|[a-z-]+(\.[A-Z]{2})?/[0-9]{7})$")
 _LEAN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_']*(\.[A-Za-z_][A-Za-z0-9_']*)*$")
 
 
@@ -24,9 +25,26 @@ class ProblemError(ValueError):
 
 
 @dataclass(frozen=True)
+class Document:
+    """Where a problem's claims come from, precisely enough to find them again."""
+    kind: str = "note"       # preprint | exercise | note
+    arxiv: str = ""          # arXiv identifier without version, e.g. 2608.02859
+    version: str = ""        # the version read, e.g. v1: a later version is another document
+    authors: str = ""
+    url: str = ""
+    pdf_sha256: str = ""     # fingerprint of the file the claims were read from
+
+    def cite(self) -> str:
+        if self.arxiv:
+            return f"arXiv:{self.arxiv}{self.version}"
+        return self.url or self.kind
+
+
+@dataclass(frozen=True)
 class Step:
     id: str
     part: str
+    locator: str             # where the claim sits in the document, e.g. "Theorem 1.2, p. 3"
     informal: str
     theorem: str | None
     signature: str | None
@@ -48,6 +66,7 @@ class Problem:
     imports: tuple[str, ...]
     preamble: str
     steps: tuple[Step, ...] = field(default_factory=tuple)
+    document: Document = field(default_factory=Document)
 
     @property
     def needs_packages(self) -> bool:
@@ -136,6 +155,7 @@ def load_problem(path: Path) -> Problem:
             Step(
                 id=sid,
                 part=_text(raw, "part", swhere, required=False),
+                locator=_text(raw, "locator", swhere, required=False),
                 informal=_text(raw, "informal", swhere),
                 theorem=theorem,
                 signature=signature,
@@ -146,6 +166,27 @@ def load_problem(path: Path) -> Problem:
     if not steps:
         raise ProblemError(f"{where}: a problem needs at least one step")
 
+    doc = data.get("document", {})
+    if not isinstance(doc, dict):
+        raise ProblemError(f"{where}: [document] must be a table")
+    dwhere = f"{where}: [document]"
+    document = Document(
+        kind=_text(doc, "kind", dwhere, required=False) or "note",
+        arxiv=_text(doc, "arxiv", dwhere, required=False),
+        version=_text(doc, "version", dwhere, required=False),
+        authors=_text(doc, "authors", dwhere, required=False),
+        url=_text(doc, "url", dwhere, required=False),
+        pdf_sha256=_text(doc, "pdf_sha256", dwhere, required=False),
+    )
+    if document.kind not in {"preprint", "exercise", "note"}:
+        raise ProblemError(f"{dwhere}: kind must be 'preprint', 'exercise' or 'note'")
+    if document.kind == "preprint" and not (document.arxiv and document.version):
+        raise ProblemError(f"{dwhere}: a preprint needs its arXiv identifier and the version that was read")
+    if document.arxiv and not _ARXIV.match(document.arxiv):
+        raise ProblemError(f"{dwhere}: arxiv {document.arxiv!r} is not an identifier such as 2608.02859")
+    if document.version and not re.fullmatch(r"v[1-9][0-9]*", document.version):
+        raise ProblemError(f"{dwhere}: version must look like v1")
+
     return Problem(
         id=pid,
         title=_text(data, "title", where),
@@ -155,9 +196,44 @@ def load_problem(path: Path) -> Problem:
         imports=tuple(imports),
         preamble=_text(data, "preamble", where, required=False),
         steps=tuple(steps),
+        document=document,
     )
 
 
 def load_all(root: Path) -> list[Problem]:
     problems = [load_problem(p) for p in sorted(root.iterdir()) if (p / "problem.toml").is_file()]
     return problems
+
+
+@dataclass(frozen=True)
+class Batch:
+    """A named list of problems to run together: `batches/<id>.toml`."""
+    id: str
+    title: str
+    problems: tuple[str, ...]
+
+
+def load_batch(path: Path, known: set[str]) -> Batch:
+    where = str(path)
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ProblemError(f"{where}: {exc}") from exc
+    bid = _text(data, "id", where)
+    if bid != path.stem or not _ID.match(bid):
+        raise ProblemError(f"{where}: id {bid!r} must equal the file name and match {_ID.pattern}")
+    problems = data.get("problems", [])
+    if not isinstance(problems, list) or not problems or not all(isinstance(p, str) for p in problems):
+        raise ProblemError(f"{where}: problems must be a non-empty list of problem ids")
+    if len(set(problems)) != len(problems):
+        raise ProblemError(f"{where}: a problem is listed twice")
+    unknown = [p for p in problems if p not in known]
+    if unknown:
+        raise ProblemError(f"{where}: unknown problem(s): {', '.join(unknown)}")
+    return Batch(id=bid, title=_text(data, "title", where), problems=tuple(problems))
+
+
+def load_batches(root: Path, known: set[str]) -> list[Batch]:
+    if not root.is_dir():
+        return []
+    return [load_batch(p, known) for p in sorted(root.glob("*.toml"))]

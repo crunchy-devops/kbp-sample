@@ -2,6 +2,28 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are the source material for chapter 3 of *Zero-trust AI*.
 
+## 0.2.0, 15 November 2026
+
+Batches. The platform's unit of work is now a batch of documents, so that a set of arXiv preprints can be put through the same gate in one run and each comes out with its own referee report.
+
+### What changed
+
+* A problem now describes its **document**: kind (preprint, exercise or note), arXiv identifier, the version that was read, authors, and the SHA-256 of the file the claims were read from. A preprint without an identifier and a version is refused, since "the latest version" is not something a referee can cite.
+* Each step can carry a **locator**, the place of the claim in the document, such as "Theorem 1.2, page 3".
+* **Batches** are named lists of problems in `batches/`. `ztproof init --batch NAME` starts one run for all of them, and the `Prove` workflow takes the batch as an input.
+* Model requests and Lean checks run **in parallel** (`--jobs`). The audit trail is still written in the run's own step order, whichever process finishes first. The first request of a round always goes alone, so a broken key is recorded once and not once per claim.
+* The run's report opens with a **summary by document**: claims pinned, proved, attempted and not proved, without a Lean statement, not examined, and how many Lean statements nobody has reviewed. Each document also gets its own `REPORT.md`.
+
+### What it does not do yet
+
+* Read a preprint. Claims and their Lean statements are still pinned by hand. A stage that extracts the claims of a preprint and proposes Lean statements for human review is the next piece, and it will treat the preprint's text as untrusted input like everything else.
+* Split a very large batch across several CI machines. One run uses one runner.
+* Everything listed under 0.1.0, which is all still true.
+
+### What went wrong on the way
+
+1. **Version 0.1.0 never reached GitHub.** The push was refused with HTTP 403: the build session had lost write access to the repository. The commit, its tests and its claims therefore stayed on one machine overnight, checked by nobody else, which is a fair description of the problem this book is about. No CI run has happened yet, and no model has been asked anything.
+
 ## 0.1.0, 14 November 2026
 
 The first version: a conjecture step goes from a prompt to a Lean 4 verdict, under Python glue, in GitHub Actions, with every attempt recorded. No context map.
