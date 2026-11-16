@@ -2,6 +2,20 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.4.1, 16 November 2026
+
+The first CI run, and the first thing it found.
+
+### What went wrong
+
+1. **The first CI run failed 30 tests out of 97.** On 16 November the push finally went through, four versions at once, and CI ran for the first time. Every test that reached the third stage of the gate failed with the same message: `no default toolchain configured`. On the CI machine `lean` is elan's proxy, which chooses a toolchain from the directory it is run in, and the gate works in temporary directories that pin none. Version 0.1.0 had met this and fixed it, for the processes Python starts: they are called by absolute path. But `lean/Gate.lean` is a Lean program, and to find the standard library it runs `lean --print-prefix` on its own, through PATH. One layer down, the same bug. The build machine has a plain Lean on PATH and no elan, so 97 tests passed there and proved nothing about this.
+2. **What the failure did not do.** In the part of the log that was read, no cheat was accepted and no honest proof was called dishonest: the verdicts were `infrastructure_error`, the outcome reserved for "the gate itself misbehaved". The gate failed closed.
+
+### What changed
+
+* Every Lean process the platform starts is now told where the pinned toolchain is (`LEAN_SYSROOT`), and finds that toolchain first on PATH.
+* A test puts an elan-like proxy on PATH and runs the gate through it, so the build machine can no longer pass what CI fails.
+
 ## 0.4.0, 16 November 2026
 
 The context pack, and a new worked exercise. Still no context map: the pack is one fixed file per problem, read whole, the same for every attempt.

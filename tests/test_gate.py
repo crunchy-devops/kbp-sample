@@ -94,3 +94,30 @@ def test_policy_table(change, expected):
              "kind": "theorem", "redefined": [], "missing": [], "axioms": []}
     facts.update(change)
     assert gate.apply_policy(facts)[0] == expected
+
+
+@needs_lean
+def test_the_gate_works_when_lean_on_path_is_only_a_proxy(fixtures: Path, tmp_path: Path, monkeypatch):
+    """What the first CI run found. Under elan, `lean` on PATH is a proxy that knows a
+    toolchain only inside a directory that pins one. The gate works in temporary
+    directories, and `lean/Gate.lean` looks for `lean` by itself to find the sysroot."""
+    from ztproof import lean
+
+    real = lean.toolchain_bin() / "lean"
+    proxy = tmp_path / "bin"
+    proxy.mkdir()
+    (proxy / "lean").write_text(
+        "#!/bin/sh\n"
+        'd="$PWD"\n'
+        'while [ "$d" != "/" ]; do\n'
+        f'  if [ -f "$d/lean-toolchain" ]; then exec "{real}" "$@"; fi\n'
+        '  d=$(dirname "$d")\n'
+        "done\n"
+        'echo "error: no default toolchain configured." >&2\n'
+        "exit 1\n", encoding="utf-8")
+    (proxy / "lean").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{proxy}:/usr/bin:/bin")
+    problem = load_problem(fixtures / "problems" / "gatecheck")
+    body = (fixtures / "gate" / "honest.lean").read_text(encoding="utf-8")
+    verdict = gate.check_attempt(problem, problem.step("sum_odds"), body, tmp_path / "work")
+    assert verdict.outcome == gate.ACCEPTED, verdict.reason

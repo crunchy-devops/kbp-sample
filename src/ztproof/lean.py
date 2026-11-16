@@ -127,6 +127,12 @@ def mathlib_revision() -> str | None:
 
 def lean_env(workdir: Path, *, packages: bool) -> dict[str, str]:
     env = {k: os.environ[k] for k in _PASSTHROUGH if k in os.environ}
+    # A Lean program may itself look for `lean`: `lean/Gate.lean` asks for the
+    # sysroot, which Lean finds by running `lean --print-prefix` from PATH. Under
+    # elan that is a proxy, and in a temporary directory the proxy knows no
+    # toolchain. So the pinned toolchain is named outright, and comes first on PATH.
+    env["LEAN_SYSROOT"] = str(toolchain_bin().parent)
+    env["PATH"] = os.pathsep.join([str(toolchain_bin()), env.get("PATH", "")]).rstrip(os.pathsep)
     paths = [str(workdir)]
     if packages:
         paths.append(package_lean_path())
