@@ -14,7 +14,7 @@ from pathlib import Path
 from .lean import REPO_ROOT
 from .problem import Problem, Step
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 PROMPTS_DIR = REPO_ROOT / "prompts"
 MAX_FEEDBACK_CHARS = 6000
 
@@ -63,6 +63,33 @@ def _clip(text: str, limit: int = MAX_FEEDBACK_CHARS) -> str:
     return text[:limit] + f"\n... ({len(text) - limit} more characters not shown)"
 
 
+def _bullets(items) -> str:
+    return "\n".join(f"* {item}" for item in items) or "* (none)"
+
+
+def _context_section(problem: Problem, step: Step, version: str) -> str:
+    """The context pack, as the model sees it. Empty when the problem has none."""
+    pack = problem.context
+    if pack is None:
+        return ""
+    assumptions = [f"`{a.name}`: {a.stands_for} How to use it: {a.how_to_use}" for a in pack.assumptions]
+    budget = []
+    if pack.budget.max_seconds_per_build:
+        budget.append(f"Lean is stopped after {pack.budget.max_seconds_per_build:.0f} seconds on your file.")
+    if pack.budget.max_heartbeats:
+        budget.append(f"`maxHeartbeats` is fixed at {pack.budget.max_heartbeats}. Do not set it: "
+                      "an attempt that does is refused before Lean runs.")
+    return _fill(_template(version, "context"), {
+        "level": pack.level or "not stated",
+        "field": pack.field or "not stated",
+        "conventions": _bullets(pack.conventions),
+        "assumptions": _bullets(assumptions),
+        "not_in_library": _bullets(pack.not_in_mathlib),
+        "forbidden": _bullets(pack.forbidden),
+        "budget": _bullets(budget),
+    })
+
+
 def build_prompt(
     problem: Problem, step: Step, *, attempt: int, max_attempts: int, lean_version: str,
     libraries: str, previous: Previous | None = None, version: str = PROMPT_VERSION,
@@ -82,6 +109,7 @@ def build_prompt(
         if problem.preamble_source().strip() else "-- no imports: Lean's core library only",
         "theorem": step.theorem or "",
         "signature": step.signature or "",
+        "context": _context_section(problem, step, version),
     }
     user = _fill(_template(version, "prove"), values)
     if previous is not None:

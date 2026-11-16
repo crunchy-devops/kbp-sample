@@ -170,10 +170,15 @@ def run(argv: list[str], *, cwd: Path, env: dict[str, str], timeout: float) -> C
     )
 
 
-def compile_module(workdir: Path, module: str, *, packages: bool, timeout: float) -> Compilation:
-    """Compile `<module>.lean` in `workdir` to `<module>.olean`."""
+def compile_module(workdir: Path, module: str, *, packages: bool, timeout: float,
+                   options: dict[str, int] | None = None) -> Compilation:
+    """Compile `<module>.lean` in `workdir` to `<module>.olean`.
+
+    `options` sets defaults of Lean options for this file, as `-Dname=value`.
+    """
+    defaults = [f"-D{name}={value}" for name, value in (options or {}).items()]
     proc = run(
-        [_tool("lean"), "--json", "-o", f"{module}.olean", f"{module}.lean"],
+        [_tool("lean"), *defaults, "--json", "-o", f"{module}.olean", f"{module}.lean"],
         cwd=workdir, env=lean_env(workdir, packages=packages), timeout=timeout,
     )
     diagnostics: list[Diagnostic] = []

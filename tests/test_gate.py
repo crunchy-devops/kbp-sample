@@ -28,7 +28,14 @@ CASES = [
     ("declared_as_axiom", "gatecheck", "sum_odds", gate.NOT_A_THEOREM),
     ("axiom_cheat", "gatecheck", "sum_odds", gate.FORBIDDEN_AXIOM),
     ("native_decide", "gatecheck", "big_decide", gate.FORBIDDEN_AXIOM),
+    ("decide_native", "gatecheck", "big_decide", gate.FORBIDDEN_AXIOM),
+    ("admit", "gatecheck", "sum_odds", gate.SORRY),
+    ("set_heartbeats", "gatecheck", "add_comm", gate.ACCEPTED),       # no context pack, so no budget to break
     ("kernel_bypass", "gatecheck-meta", "false_claim", gate.REPLAY_FAILED),
+    # a problem with a context pack: a named assumption and a budget
+    ("packed_honest", "packed", "conditional", gate.ACCEPTED),
+    ("assumption_as_axiom", "packed", "conditional", gate.FORBIDDEN_AXIOM),
+    ("packed_set_heartbeats", "packed", "conditional", gate.BUDGET_OVERRIDE),
 ]
 
 

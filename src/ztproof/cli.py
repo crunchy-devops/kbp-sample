@@ -141,6 +141,11 @@ def cmd_batches(args: argparse.Namespace) -> int:
 def cmd_problems(args: argparse.Namespace) -> int:
     for p in load_all(PROBLEMS_DIR):
         print(f"{p.id}: {p.title} [{p.status}; imports: {', '.join(p.imports) or 'core only'}]")
+        if p.context:
+            assumed = ", ".join(f"{a.name} ({'reviewed by ' + a.reviewed_by if a.reviewed_by else 'NOT REVIEWED'})"
+                                for a in p.context.assumptions) or "nothing"
+            print(f"  context pack {p.context.sha256[:12]}: assumes {assumed}; "
+                  f"budget {p.context.budget.max_attempts or 'unset'} attempts")
         for s in p.steps:
             state = f"theorem {s.theorem}" if s.formalised else "no Lean statement yet"
             review = f"reviewed by {s.reviewed_by}" if s.reviewed_by else "NOT REVIEWED"
@@ -246,6 +251,19 @@ def cmd_recheck(args: argparse.Namespace) -> int:
     return 0 if all(r.outcome == gate.ACCEPTED for r in results) else 1
 
 
+def cmd_prompt(args: argparse.Namespace) -> int:
+    """The exact first prompt for one step. Asks no model and costs nothing."""
+    from .prompt import build_prompt
+
+    problem = load_problem(Path(args.problems) / args.problem)
+    step = problem.step(args.step)
+    prompt = build_prompt(problem, step, attempt=1, max_attempts=problem.attempts_allowed(args.max_attempts),
+                          lean_version="see lean-toolchain", libraries=", ".join(problem.imports) or "core only")
+    print(f"<!-- system prompt -->\n{prompt.system}\n\n<!-- user prompt -->\n{prompt.user}")
+    print(f"<!-- prompt {prompt.version}, SHA-256 {prompt.sha256} -->")
+    return 0
+
+
 def cmd_gate(args: argparse.Namespace) -> int:
     problem = load_problem(Path(args.problems) / args.problem)
     step = problem.step(args.step)
@@ -273,7 +291,8 @@ def main(argv: list[str] | None = None) -> int:
     def selection(p: argparse.ArgumentParser) -> None:
         p.add_argument("--batch", help="run the documents listed in batches/<BATCH>.toml")
         p.add_argument("--only", action="append", metavar="PROBLEM[/STEP]", help="restrict the run; repeatable")
-        p.add_argument("--max-attempts", type=int, default=3)
+        p.add_argument("--max-attempts", type=int, default=3,
+                       help="attempts per step; a context pack may set a smaller budget for its problem")
         p.add_argument("--model", default=os.environ.get("ZTPROOF_MODEL") or DEFAULT_MODEL)
         p.add_argument("--effort", default=os.environ.get("ZTPROOF_EFFORT") or DEFAULT_EFFORT)
         p.add_argument("--run-id")
@@ -304,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--summary", action="store_true", help="also append the result to the CI job summary")
     selection(add("run", cmd_run, "all stages in one process, for local use"))
     add("recheck", cmd_recheck, "re-run the gate on every accepted proof in proofs/")
+    pr = add("prompt", cmd_prompt, "print the first prompt for one step, without asking a model")
+    pr.add_argument("--problems", default=str(PROBLEMS_DIR))
+    pr.add_argument("--problem", required=True)
+    pr.add_argument("--step", required=True)
+    pr.add_argument("--max-attempts", type=int, default=3)
     g = add("gate", cmd_gate, "run the gate on one Lean file by hand")
     g.add_argument("--problems", default=str(PROBLEMS_DIR))
     g.add_argument("--problem", required=True)

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ztproof"
-version = "0.3.0"
+version = "0.4.0"
 description = "Zero-trust AI: from a prompt to a Lean 4 verdict, with every failure on record"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["anthropic>=2.8,<3"]
+dependencies = ["anthropic>=2.8,<3", "pyyaml>=6"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

@@ -14,6 +14,9 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import context as context_pack
+from .context import ContextError, ContextPack
+
 CORE_MODULES = {"Init", "Std", "Lean"}
 _ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _ARXIV = re.compile(r"^([0-9]{4}\.[0-9]{4,5}|[a-z-]+(\.[A-Z]{2})?/[0-9]{7})$")
@@ -68,6 +71,18 @@ class Problem:
     preamble: str
     steps: tuple[Step, ...] = field(default_factory=tuple)
     document: Document = field(default_factory=Document)
+    context: ContextPack | None = None      # problems/<id>/context.yaml, when there is one
+
+    def attempts_allowed(self, run_limit: int) -> int:
+        """The run's limit, or the context pack's budget when that is smaller."""
+        budget = self.context.budget.max_attempts if self.context else None
+        return min(run_limit, budget) if budget else run_limit
+
+    def assumptions_of(self, step: Step) -> list:
+        """The named assumptions of the context pack that this step takes as hypotheses."""
+        if not self.context or not step.signature:
+            return []
+        return [a for a in self.context.assumptions if re.search(rf"\b{re.escape(a.short)}\b", step.signature)]
 
     @property
     def needs_packages(self) -> bool:
@@ -193,6 +208,22 @@ def load_problem(path: Path) -> Problem:
     if document.version and not re.fullmatch(r"v[1-9][0-9]*", document.version):
         raise ProblemError(f"{dwhere}: version must look like v1")
 
+    preamble = _text(data, "preamble", where, required=False)
+    if context_pack.preamble_declares_axiom(preamble):
+        # The gate would reject any proof that used it. Refusing it here says why.
+        raise ProblemError(f"{where}: the preamble declares an axiom. What a problem lets us assume "
+                           "enters a statement as a hypothesis, never as an axiom")
+    pack = None
+    pack_file = file.parent / "context.yaml"
+    if pack_file.is_file():
+        try:
+            pack = context_pack.load_pack(pack_file)
+            context_pack.check_against_problem(
+                pack, problem_id=pid, imports=tuple(imports), preamble=preamble,
+                signatures=[s.signature for s in steps if s.signature], where=str(pack_file))
+        except ContextError as exc:
+            raise ProblemError(str(exc)) from exc
+
     return Problem(
         id=pid,
         title=_text(data, "title", where),
@@ -200,9 +231,10 @@ def load_problem(path: Path) -> Problem:
         status=status,
         informal=_text(data, "informal", where),
         imports=tuple(imports),
-        preamble=_text(data, "preamble", where, required=False),
+        preamble=preamble,
         steps=tuple(steps),
         document=document,
+        context=pack,
     )
 
 

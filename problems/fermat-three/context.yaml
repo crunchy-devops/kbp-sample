@@ -1,0 +1,67 @@
+# The context pack: everything the model may know about this problem.
+# Versioned with the project. Change it in a reviewed commit, never during a run.
+#
+# This is the author's pack of 16 November 2026 (agents/context.yaml in the example
+# layout), with five changes, each because the platform checks the pack against its
+# own files and refuses a pack that disagrees with them:
+#   - toolchain: v4.35.0, which is what lean-toolchain and lake-manifest.json pin
+#     (the example said v4.34.1);
+#   - imports: Mathlib, which is what the definitions import. An attempt imports
+#     nothing itself: the platform writes its first lines (the example said
+#     Fermat3.Defs, which is the same thing under the example's file names);
+#   - assumptions.file: where the definition lives on this platform;
+#   - one convention added, for IsFreyTriple, which the Lean definitions introduce;
+#   - forbidden: "the definitions, the pinned statement" where the example named the
+#     files Defs.lean and Challenge.lean, which this platform writes itself.
+
+problem:
+  id: fermat-three
+  informal: >
+    Let p >= 5 be a prime. The equation x^p + y^p = 3 z^p has no solutions
+    in non-zero integers x, y, z with gcd(x, y, z) = 1.
+  level: research (graduate number theory)
+  field: Diophantine equations, modular method
+  source: "Advanced Number Theory Exercise, Exercise 1"
+
+library: Fermat3           # the namespace of the definitions and of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+  mathlib: v4.35.0         # must match lean-toolchain and lake-manifest.json
+
+imports:                   # what the definitions import; an attempt may import nothing
+  - Mathlib
+
+conventions:
+  - "x, y, z are integers (type Int). The exponent p is a natural number."
+  - "Write gcd(x, y, z) = 1 as Int.gcd (Int.gcd x y) z = 1."
+  - "State 'no solutions' as an inequality: x ^ p + y ^ p ≠ 3 * z ^ p."
+  - "Use the keyword theorem for every claim, inside namespace Fermat3."
+  - "Coprimality of integers is IsCoprime; divisibility by a numeral is (32 : Int) ∣ B."
+  - "IsFreyTriple p A B C packs the hypotheses of the modular method; FreyLevelSix says no such triple exists for a prime p ≥ 5."
+
+assumptions:               # what may be assumed without proof, and nothing else
+  - name: FreyLevelSix
+    file: problems/fermat-three/problem.toml
+    stands_for: >
+      Frey-Hellegouarch curve, Mazur (irreducibility), Wiles and Taylor-Wiles
+      (modularity), Ribet (level lowering), and the absence of weight-2
+      newforms of level dividing 6.
+    how_to_use: "As a hypothesis of the final theorem. Never as an axiom."
+    reviewed_by: "<name of the number theorist>, <date>"
+
+not_in_mathlib:            # do not search for these; do not invent names for them
+  - Galois representations attached to elliptic curves
+  - conductors and minimal discriminants of elliptic curves over Q
+  - modularity theorem, level lowering, Mazur's isogeny theorem
+  - dimension formulas for spaces of cusp forms
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions, the pinned statement, lean-toolchain, lakefile.toml"
+  - "adding a hypothesis to the final theorem"
+
+budget:
+  max_attempts: 8
+  max_seconds_per_build: 600
+  max_heartbeats: 400000

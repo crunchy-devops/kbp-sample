@@ -33,6 +33,7 @@ audit/runs/<run id>/
 | `refusal` | The model declined to answer | the glue |
 | `truncated` | The reply hit the output limit | the glue |
 | `protocol_violation` | The reply did not contain exactly one `lean` code block | the glue |
+| `budget_override` | The attempt sets `maxHeartbeats`, which the problem's context pack fixes | the glue, before Lean runs |
 | `lean_error` | The attempt does not elaborate | `lean` |
 | `lean_timeout` | Lean did not finish in the time allowed | `lean` |
 | `theorem_missing` | The attempt does not declare the theorem asked for | `lean/Gate.lean` |
@@ -44,6 +45,10 @@ audit/runs/<run id>/
 | `kernel_replay_failed` | A declaration reached the compiled file without passing the kernel | `leanchecker` |
 | `statement_invalid` | Our own pinned statement does not elaborate. Our bug, not the model's | `lean` |
 | `infrastructure_error` | The gate itself misbehaved. Also ours | the glue |
+
+## Context packs
+
+When a problem has a context pack, `run.json` records its SHA-256 under `context_packs` as the run starts, and `statement.json`, `generation.json` and every line of `attempts.jsonl` carry it as `context_sha256`. `statement.json` also lists the named assumptions the statement takes as hypotheses, and who reviewed each. If the pack on disk stops matching the fingerprint in `run.json`, the run is cut short and says why.
 
 ## Calibration runs
 

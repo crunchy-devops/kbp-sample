@@ -31,10 +31,14 @@ def _status(run: Run, t: Target) -> tuple[str, dict | None]:
     control = t.step.expect == "not_proved"
     for v in verdicts:
         if v["outcome"] == gate.ACCEPTED:
+            assumed = t.problem.assumptions_of(t.step)
+            if assumed and not control:
+                names = ", ".join(f"`{a.name}`" for a in assumed)
+                return (f"**proved, assuming {names}**, attempt {v['attempt']} of {run.attempts_allowed(t)}"), v
             if control:
                 return (f"**ACCEPTED, AND IT MUST NOT BE**: this statement is a negative control, known to be "
                         f"false (attempt {v['attempt']}). The gate has a hole"), v
-            return f"**proved**, attempt {v['attempt']} of {run.meta['max_attempts']}", v
+            return f"**proved**, attempt {v['attempt']} of {run.attempts_allowed(t)}", v
     if run.pending(t) is not None:
         return "reply awaiting verification", None
     if not verdicts:
@@ -52,7 +56,8 @@ def _cell(text: str) -> str:
 CAVEATS = [
     "## What this report does not establish", "",
     "* That a Lean statement faithfully expresses the informal claim. That is a human judgement, recorded above as the reviewer.",
-    "* That the hypotheses of a statement are true. A step proved under hypotheses is an implication, no more.",
+    "* That the hypotheses of a statement are true. A step proved under hypotheses is an implication, no more. "
+    "This holds with full force for a named assumption that stands for theorems not formalised here.",
     "* That the claims listed are all the claims of the document. A claim nobody pinned was not examined.",
     "* That Lean's kernel, the compiler that built it, or the machine it ran on are free of defects.",
     "* Anything about steps listed as not proved, not attempted or skipped. A failure to prove is not a disproof.",
@@ -72,7 +77,7 @@ def _run_table(run: Run) -> list[str]:
         f"| Prompt templates | `prompts/{m['prompt_version']}/` |",
         f"| Lean | {m.get('lean_version') or 'not recorded'} |",
         f"| Mathlib | {m.get('mathlib') or 'not used'} |",
-        f"| Attempts allowed per step | {m['max_attempts']} |",
+        f"| Attempts allowed per step | {m['max_attempts']}, or the context pack's budget where that is smaller |",
     ]
     if m.get("batch"):
         out.insert(3, f"| Batch | `{m['batch']['id']}`: {_cell(m['batch']['title'])} |")
@@ -110,6 +115,23 @@ def _tally(run: Run, problem: Problem) -> dict[str, int]:
         else:
             counts["other"] += 1
     return counts
+
+
+def _context_lines(run: Run, problem: Problem) -> list[str]:
+    """What the model was told beyond the statement, for the reader to check for themselves."""
+    pack = problem.context
+    if pack is None:
+        return ["* Context pack: none. The model was given the statement and nothing else."]
+    recorded = (run.meta.get("context_packs") or {}).get(problem.id)
+    out = [f"* Context pack: `problems/{problem.id}/context.yaml`, SHA-256 `{recorded or pack.sha256}`"]
+    for a in pack.assumptions:
+        out.append(f"* Assumed without proof: `{a.name}`, reviewed by {a.reviewed_by or 'nobody yet'}")
+    limits = [f"{pack.budget.max_attempts} attempts" if pack.budget.max_attempts else "",
+              f"{pack.budget.max_seconds_per_build:.0f} s per Lean build" if pack.budget.max_seconds_per_build else "",
+              f"maxHeartbeats {pack.budget.max_heartbeats}" if pack.budget.max_heartbeats else ""]
+    if any(limits):
+        out.append("* Budget: " + ", ".join(x for x in limits if x))
+    return out
 
 
 def _source_lines(problem: Problem) -> list[str]:
@@ -153,6 +175,12 @@ def _step_sections(run: Run, problem: Problem, level: str) -> list[str]:
             f"* Reviewed by: {step.reviewed_by or 'nobody yet'}",
             f"* Statement fingerprint (SHA-256): `{statement.get('statement_sha256', 'n/a')}`",
         ]
+        for a in problem.assumptions_of(step):
+            out += ["", f"**Named assumption `{a.name}`.** The statement takes it as a hypothesis, so what is proved "
+                    f"is an implication. It stands for: {a.stands_for} Reviewed by: {a.reviewed_by or 'nobody yet'}."]
+            if not a.reviewed_by:
+                out += ["", f"W> Nobody has reviewed the Lean definition of `{a.name}`. If it says more than the "
+                        "theorems it stands for, the result is empty; if it is false, the result is vacuous."]
         if not step.reviewed_by:
             out += ["", "W> No human has reviewed this Lean statement. The kernel checks that a proof matches the "
                     "statement; it cannot check that the statement says what the mathematics means."]
@@ -190,7 +218,7 @@ def render_document(run: Run, problem: Problem) -> str:
         "This report is generated from the files of one run. It states what was checked, by which tool, "
         "and what was not checked. Nothing in it comes from a model's description of its own work.", "",
         "## The document", "",
-        *_source_lines(problem), "",
+        *_source_lines(problem), *_context_lines(run, problem), "",
         f"Of {c['claims']} claim(s) pinned for this document: {c['proved']} proved, {c['not_proved']} attempted and "
         f"not proved, {c['not_formalised']} without a Lean statement, {c['other']} not examined in this run. "
         f"{c['unreviewed']} Lean statement(s) have not been reviewed by a human.", "",
@@ -222,7 +250,7 @@ def render(run: Run) -> str:
                    f"{c['proved']} | {c['not_proved']} | {c['not_formalised']} | {c['other']} | {c['unreviewed']} |")
     out += ["", "Each document also has its own report, `<document>/REPORT.md`, in this directory."]
     for problem in run.documents:
-        out += ["", f"## `{problem.id}`: {problem.title}", "", *_source_lines(problem),
+        out += ["", f"## `{problem.id}`: {problem.title}", "", *_source_lines(problem), *_context_lines(run, problem),
                 *_step_sections(run, problem, "###")]
     out += ["", *CAVEATS]
     return "\n".join(out)

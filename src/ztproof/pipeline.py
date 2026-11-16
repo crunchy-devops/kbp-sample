@@ -127,6 +127,18 @@ class Run:
                 return d
         return None
 
+    def attempts_allowed(self, t: Target) -> int:
+        return t.problem.attempts_allowed(self.meta["max_attempts"])
+
+    def changed_context(self) -> str | None:
+        """The first problem whose context pack is not the one the run started with."""
+        recorded = self.meta.get("context_packs") or {}
+        for problem in {t.problem.id: t.problem for t in self.targets}.values():
+            now = problem.context.sha256 if problem.context else None
+            if recorded.get(problem.id) != now:
+                return problem.id
+        return None
+
     def wants_generation(self, t: Target) -> bool:
         statement = self.statement(t)
         if self.meta.get("aborted") or not statement or not statement.get("valid"):
@@ -136,7 +148,7 @@ class Run:
         verdicts = self.verdicts(t)
         if any(v["outcome"] == gate.ACCEPTED for v in verdicts):
             return False
-        return len(self.attempt_dirs(t)) < self.meta["max_attempts"]
+        return len(self.attempt_dirs(t)) < self.attempts_allowed(t)
 
     def open_steps(self) -> list[Target]:
         return [t for t in self.targets if self.wants_generation(t)]
@@ -209,6 +221,10 @@ def init_run(
         "calibrated_by": calibrated_by,
         "documents": [p.id for p in problems if not only or p.id in only
                       or any(k.startswith(p.id + "/") for k in only)],
+        # Fingerprint of each context pack as the run starts. A pack is changed in a
+        # reviewed commit, never during a run.
+        "context_packs": {p.id: p.context.sha256 for p in {t.problem.id: t.problem for t in selected}.values()
+                          if p.context},
         "steps": [t.key for t in selected],
         "skipped": skipped,
     })
@@ -238,6 +254,8 @@ def check_statements(run: Run, config: gate.GateConfig | None = None) -> bool:
             "reviewed_by": t.step.reviewed_by,
             "document": t.problem.document.cite(),
             "locator": t.step.locator,
+            "context_sha256": t.problem.context.sha256 if t.problem.context else None,
+            "assumptions": [{"name": a.name, "reviewed_by": a.reviewed_by} for a in t.problem.assumptions_of(t.step)],
         })
         all_valid = all_valid and stage.passed
     return all_valid
@@ -276,12 +294,16 @@ def generate_round(run: Run, generator: Generator, jobs: int = 1) -> int:
     batch of documents practical. The first request always goes alone: if the key
     or the network is broken we want one record of it, not one per step.
     """
+    changed = run.changed_context()
+    if changed and not run.meta.get("aborted"):
+        run.meta["aborted"] = f"the context pack of {changed} changed after the run started"
+        run.save_meta()
     prepared: list[tuple[Target, Path, object]] = []
     for t in run.open_steps():
         number = len(run.attempt_dirs(t)) + 1
         directory = run.step_dir(t) / f"attempt-{number:02d}"
         prompt = build_prompt(
-            t.problem, t.step, attempt=number, max_attempts=run.meta["max_attempts"],
+            t.problem, t.step, attempt=number, max_attempts=run.attempts_allowed(t),
             lean_version=run.meta.get("lean_version") or "see lean-toolchain",
             libraries=_libraries(t.problem, run), previous=_previous(run, t),
         )
@@ -294,7 +316,8 @@ def generate_round(run: Run, generator: Generator, jobs: int = 1) -> int:
         (directory / "reply.md").write_text(generation.text, encoding="utf-8")
         data = generation.to_json()
         del data["text"]
-        data.update(prompt_version=prompt.version, prompt_sha256=prompt.sha256, generated=_now())
+        data.update(prompt_version=prompt.version, prompt_sha256=prompt.sha256, generated=_now(),
+                    context_sha256=t.problem.context.sha256 if t.problem.context else None)
         _write_json(directory / "generation.json", data)
         if _infrastructure_failure(generation) and not run.meta.get("aborted"):
             # Authentication, quota, network: asking again would only fill the
@@ -374,8 +397,9 @@ def verify_round(run: Run, config: gate.GateConfig | None = None, proofs_dir: Pa
                 "step": t.step.id,
                 "locator": t.step.locator,
                 "attempt": number,
-                "max_attempts": run.meta["max_attempts"],
+                "max_attempts": run.attempts_allowed(t),
                 "prompt_version": generation.get("prompt_version"),
+                "context_sha256": generation.get("context_sha256"),
                 "prompt_sha256": generation.get("prompt_sha256"),
                 "model_requested": generation.get("model_requested"),
                 "model_served": generation.get("model_served"),

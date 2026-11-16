@@ -1,0 +1,22 @@
+# Test problem with a context pack. Never sent to a model.
+id = "packed"
+title = "Gate self-test, with a context pack"
+source = "Written for the test suite."
+status = "known"
+imports = []
+informal = "A statement that takes a named assumption as a hypothesis."
+preamble = """
+namespace Packed
+
+/-- Stands in for a deep theorem nobody wants to formalise today. -/
+def DeepFact : Prop := ∀ n : Nat, n ≤ 2 * n
+
+end Packed
+"""
+
+[[steps]]
+id = "conditional"
+informal = "Assuming DeepFact, every natural number is at most its double plus one."
+theorem = "Packed.bound"
+signature = "(h : DeepFact) (n : Nat) : n ≤ 2 * n + 1"
+formalised_by = "test suite"

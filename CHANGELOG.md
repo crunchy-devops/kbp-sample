@@ -2,6 +2,46 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.4.0, 16 November 2026
+
+The context pack, and a new worked exercise. Still no context map: the pack is one fixed file per problem, read whole, the same for every attempt.
+
+### What changed
+
+* A **context pack**, `problems/<id>/context.yaml`, in the form the author supplied: the problem in plain words, toolchain, imports, conventions, named assumptions, what is not in Mathlib, a forbidden list and a budget. Prompt templates are now `prompts/v2/`, which add the pack to the prompt. Version 1 never met a model.
+* **The pack is checked, not believed.** Its toolchain must be the one `lean-toolchain` and `lake-manifest.json` pin; its imports must be the problem's; each named assumption must be a definition in the problem's preamble and a hypothesis of a pinned statement; an unknown key is an error. A problem whose preamble declares an `axiom` no longer loads.
+* **The pack's fingerprint** is recorded when a run starts and with every attempt. A pack that changes during a run stops the run.
+* **Budget.** The pack's `max_attempts` caps the attempts for its problem, `max_seconds_per_build` caps one Lean compilation, and `max_heartbeats` becomes Lean's default for the attempt. An attempt that sets `maxHeartbeats` itself gets a new outcome, `budget_override`, before Lean runs.
+* **Named assumptions in the report.** A claim proved under one is reported as "proved, assuming ...", with what the assumption stands for and who reviewed its Lean definition.
+* **The Fermat-three exercise**, `problems/fermat-three/`: for a prime `p \ge 5`$, `x^p + y^p = 3z^p`$ has no solution in non-zero integers with `\gcd(x, y, z) = 1`$. Three pinned claims: pairwise coprimality, the Frey triple, and the theorem under the named assumption `FreyLevelSix`. A batch, `fermat-three`, runs it.
+* Six new gate fixtures, twenty-one in all: `admit`, `decide +native`, a named assumption promoted to an axiom, an attempt that raises its own budget, and their honest counterparts.
+* `ztproof prompt` prints the exact prompt for a claim without asking a model.
+* The Prove workflow has eight rounds, the largest budget it accepts, and a test now reads the workflow as data to check that the key and Lean never share a step.
+
+### What it does not do yet
+
+* Let a later claim use the accepted proof of an earlier one. The three claims of Fermat-three are stepping stones, each proved from scratch, so the proof of the last must redo the second. It is a chain on paper only.
+* Give the model tools. The author's layout has a `tools/` directory of model-written scripts, reviewed by a person before use. Here the model writes one block of Lean and nothing else.
+* Write an exercise out as a standalone Lean project in the author's layout. The README maps each file of that layout to its counterpart; the files themselves are not generated.
+* Run the official comparator as a second, independent check of statement against solution.
+* Everything listed under earlier versions that is not mentioned above.
+
+### What was checked, and how far
+
+The definitions and the three statements of Fermat-three elaborate with Lean 4.35.0 against Mathlib v4.35.0. To find that out, the 1 177 modules they depend on were built from source on the build machine, since the prebuilt cache is still out of reach there. That is the first time any Mathlib statement of this project has met Lean. It was done with the narrow imports the statements need; the pinned problem says `import Mathlib`, which has still been elaborated nowhere.
+
+No proof of any of the three was attempted. No number theorist has read the definitions.
+
+A search over small numbers found no triple satisfying `IsFreyTriple` for `p = 5, 7, 11`$ (integers up to `10^{11}`$, `10^{12}`$ and `10^{13}`$). This proves nothing about the assumption. It would have caught a definition that is plainly false, and the next item explains why that was worth an afternoon's doubt.
+
+### What went wrong on the way
+
+1. **The first draft of the named assumption was false.** `FreyLevelSix` says that no triple `(A, B, C)`$ has a certain list of properties. Without the condition `B \ne 0`$, the triple `(-1, 0, 1)`$ has all of them: the sum is zero, `-1`$ and `0`$ are coprime, `-1 \equiv 3 \pmod 4`$, 32 divides 0, and every prime divides the product 0 to the power 0, a multiple of anything. A false assumption proves everything, so the final theorem would have been accepted by the kernel, correctly, and would have meant nothing. Caught on paper before any Lean was written, by nobody more qualified than the author of the mistake. Dropping the condition `32 \mid B`$ to `8 \mid B`$ lets in `1 + 8 = 9`$, which the search above does find. This is the failure the gate cannot see, and the reason the reviewer's name is still an empty field.
+2. **The example pack and the repository disagreed about Lean.** The pack as supplied names v4.34.1; the repository pins v4.35.0. One of them had to move. The pack moved, and the loader now refuses any pack whose toolchain is not the pinned one, so the next disagreement will be an error and not a footnote.
+3. **`decide +native` does not leave the axiom `native_decide` leaves.** It leaves one named after the theorem itself, `count_check._native.decide.ax_1_1`. A gate that kept a list of forbidden axioms would have let it through. This one keeps a list of three allowed axioms and rejects the rest, so the new fixture was refused at its first run; only the explanatory hint failed to recognise it.
+4. **The author's forbidden list named files that do not exist here.** "Editing Defs.lean, Challenge.lean" is forbidden in the example. On this platform a model cannot edit them because it never holds them: the platform writes both above and beside every attempt. The pack's wording was changed to say what is meant, and the README lists, for each forbidden item, what stops it.
+5. **Still nothing has run for real.** The push is still refused, for the third day. There has been no CI run, no calibration and no model attempt. Four versions now sit on one machine.
+
 ## 0.3.0, 15 November 2026
 
 Stage 0. No batch starts cold: a golden set goes through the same pipeline first, and its result decides whether the batch may start and how many workers it gets.

@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import lean
+from .context import SET_HEARTBEATS
 from .problem import Problem, Step
 
 ALLOWED_AXIOMS = frozenset({"propext", "Classical.choice", "Quot.sound"})
@@ -45,6 +46,7 @@ REDEFINITION = "redefinition"
 SORRY = "sorry"
 FORBIDDEN_AXIOM = "forbidden_axiom"
 REPLAY_FAILED = "kernel_replay_failed"
+BUDGET_OVERRIDE = "budget_override"          # the attempt sets an option the context pack fixes
 
 
 @dataclass
@@ -128,8 +130,8 @@ def apply_policy(facts: dict) -> tuple[str, str]:
         return SORRY, "the proof contains `sorry`"
     extra = sorted(axioms - ALLOWED_AXIOMS)
     if extra:
-        hint = " (`native_decide` trusts the compiler, not the kernel)" if any(
-            "native_decide" in a or a.startswith("Lean.ofReduceBool") or a == "Lean.trustCompiler"
+        hint = " (`native_decide` and `decide +native` trust the compiler, not the kernel)" if any(
+            "native_decide" in a or "_native." in a or a.startswith("Lean.ofReduceBool") or a == "Lean.trustCompiler"
             for a in extra) else ""
         return FORBIDDEN_AXIOM, "the proof depends on non-standard axioms: " + ", ".join(extra) + hint
     return ACCEPTED, "same statement, a theorem, standard axioms only"
@@ -160,16 +162,28 @@ def check_attempt(
     if not stage.passed:
         return stop(STATEMENT_INVALID, stage.detail)
 
-    # 2. compile the attempt
+    # 2. compile the attempt, within the budget of the problem's context pack if it has one
+    budget = problem.context.budget if problem.context else None
+    compile_timeout = config.compile_timeout
+    options: dict[str, int] = {}
+    if budget and budget.max_seconds_per_build:
+        compile_timeout = min(compile_timeout, budget.max_seconds_per_build)
+    if budget and budget.max_heartbeats:
+        options["maxHeartbeats"] = budget.max_heartbeats
+        if SET_HEARTBEATS.search(body):
+            verdict.stages.append(StageResult("compile", False, 0.0, "the attempt sets `maxHeartbeats`"))
+            return stop(BUDGET_OVERRIDE, f"the attempt sets `maxHeartbeats`, which the context pack fixes at "
+                                         f"{budget.max_heartbeats}; remove the `set_option`")
     (workdir / "ZtAttempt.lean").write_text(source, encoding="utf-8")
-    compiled = lean.compile_module(workdir, "ZtAttempt", packages=packages, timeout=config.compile_timeout)
+    compiled = lean.compile_module(workdir, "ZtAttempt", packages=packages, timeout=compile_timeout,
+                                   options=options)
     for d in compiled.diagnostics:
         d.line = max(d.line - HEADER_LINES, 0)  # line numbers as the author of the body sees them
     verdict.diagnostics = [d.render() for d in compiled.diagnostics]
     if compiled.process.timed_out:
         verdict.stages.append(StageResult("compile", False, compiled.process.seconds, "timed out",
                                           compiled.process.max_rss_mb))
-        return stop(LEAN_TIMEOUT, f"Lean did not finish within {config.compile_timeout:.0f} s")
+        return stop(LEAN_TIMEOUT, f"Lean did not finish within {compile_timeout:.0f} s")
     if not compiled.ok:
         errors = compiled.errors
         detail = errors[0].render() if errors else compiled.process.stderr.strip()[:500]
