@@ -1,0 +1,38 @@
+# Context pack for the test problem. The toolchain lines must match the repository's
+# own pins, which is the point: a pack that disagrees with them is refused.
+problem:
+  id: packed
+  informal: A statement that takes a named assumption as a hypothesis.
+  level: test
+  field: test
+  source: the test suite
+
+library: Packed
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+  mathlib: v4.35.0
+
+imports: []
+
+conventions:
+  - "Natural numbers are Nat."
+
+assumptions:
+  - name: DeepFact
+    file: tests/fixtures/problems/packed/problem.toml
+    stands_for: A deep theorem, taken on trust for the length of one test.
+    how_to_use: "As a hypothesis of the theorem. Never as an axiom."
+    reviewed_by: "<name of the reviewer>, <date>"
+
+not_in_mathlib:
+  - the deep theorem itself
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "adding a hypothesis to the theorem"
+
+budget:
+  max_attempts: 2
+  max_seconds_per_build: 120
+  max_heartbeats: 200000

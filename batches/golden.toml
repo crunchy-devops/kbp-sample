@@ -1,0 +1,24 @@
+# The golden set: the canary batch for Stage 0.
+#
+# Every claim of golden-core is known to be provable, and has a reference proof
+# under golden/ that the gate accepts. Every claim of golden-controls is known to
+# be false, and must never come out proved. Before a production batch, the pipeline is run on
+# this batch with exactly the configuration the production batch will use, and
+# the thresholds below decide whether the production batch may start.
+
+id = "golden"
+title = "Golden set: known results with reference proofs"
+problems = ["golden-core", "golden-controls"]
+
+[calibration]
+# Share of golden claims that must end proved within the attempts allowed.
+# They are all provable, so anything short of all of them is a signal.
+min_pass_rate = 1.0
+
+# Share that must be proved at the first attempt (Pass@1). Not enforced yet: a
+# threshold is a measured baseline minus a tolerance, and no baseline has been
+# measured. Set it, by reviewed change, after the first real calibration runs.
+# min_pass_at_1 = 0.0
+
+# Peak memory of one Lean process, in megabytes, above which the run is a no-go.
+# max_peak_lean_mb = 0

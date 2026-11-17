@@ -1,0 +1,103 @@
+# Exercise E1, the book's worked case for chapter 3.
+#
+# The informal text is a transcription of the author's one-page PDF
+# (exercise_only.pdf, dated 12 November 2026), checked against the PDF on
+# 14 November 2026. It holds no solution.
+#
+# One step per link of the chain. A step with no `theorem` and `signature` has not
+# been formalised yet: the platform lists it and asks no model about it.
+#
+# Convention for the Lean statements: the three facts the exercise allows us to
+# assume, and any earlier part a later part relies on, enter as explicit
+# hypotheses of the theorem. They never enter as axioms.
+
+id = "class-number"
+title = "Dirichlet's class number formula for Q(sqrt(-p)) and the excess of quadratic residues"
+source = "PhD-level number theory exercise supplied by the author (exercise_only.pdf, 12 November 2026)."
+status = "known"
+imports = ["Mathlib"]
+
+informal = """
+Let `p > 3`$ be a prime with `p \\equiv 3 \\pmod{4}`$. Let `\\chi(a) = \\left(\\frac{a}{p}\\right)`$ be the
+Legendre symbol, viewed as a Dirichlet character modulo `p`$. Let `K = \\mathbb{Q}(\\sqrt{-p})`$, whose
+discriminant is `d_K = -p`$, and let `h = h(-p)`$ be its class number. Write `e(x) = \\exp(2\\pi i x)`$ and
+`\\tau(\\chi) = \\sum_{a=1}^{p-1} \\chi(a)\\, e(a/p)`$.
+
+Facts that may be assumed without proof:
+
+1. Gauss's sign theorem: `\\tau(\\chi) = i\\sqrt{p}`$ when `p \\equiv 3 \\pmod{4}`$.
+2. The analytic class number formula for an imaginary quadratic field `K`$ of discriminant `d < 0`$ with
+   `w_K`$ roots of unity: `L(1, \\chi_d) = \\frac{2\\pi\\, h(d)}{w_K \\sqrt{|d|}}`$.
+3. The fact that `\\chi_{-p}`$, the Kronecker character of `K`$, is equal to `\\left(\\frac{\\cdot}{p}\\right)`$.
+"""
+
+[document]
+kind = "exercise"
+authors = "supplied by the author of the book; no author is named on the sheet"
+pdf_sha256 = "ee1e4054a2bd0e6636dee60b429992a52f109a85acdcdf05cd9b69f0fcef6af3"
+
+[[steps]]
+id = "a1_chi_odd"
+locator = "page 1, question (a), first sentence"
+part = "(a), first claim"
+informal = "Show that `\\chi`$ is odd, that is `\\chi(-1) = -1`$."
+theorem = "chi_neg_one"
+signature = "(p : ℕ) [Fact p.Prime] (hp : p % 4 = 3) : legendreSym p (-1) = -1"
+formalised_by = "Claude, in the platform build thread, 14 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "a2_twisted_sum"
+locator = "page 1, question (a), displayed formula"
+part = "(a), second claim"
+informal = "Show that for every integer `n`$, `\\chi(n)\\, \\tau(\\bar{\\chi}) = \\sum_{a=1}^{p-1} \\bar{\\chi}(a)\\, e(an/p)`$."
+
+[[steps]]
+id = "a3_gauss_product"
+locator = "page 1, question (a), last sentence"
+part = "(a), deduction"
+informal = "Deduce that `\\tau(\\chi)\\, \\tau(\\bar{\\chi}) = \\chi(-1)\\, p = -p`$."
+
+[[steps]]
+id = "b_l_value"
+locator = "page 1, question (b)"
+part = "(b)"
+informal = """
+Prove that `L(1, \\chi) = \\sum_{n \\ge 1} \\frac{\\chi(n)}{n} = -\\frac{\\pi}{p^{3/2}} \\sum_{a=1}^{p-1} a\\, \\chi(a)`$.
+Justify every interchange of limits. In particular, explain why `\\sum_{n \\ge 1} e(an/p)/n`$ converges for
+`p \\nmid a`$, and identify its value.
+"""
+
+[[steps]]
+id = "c_class_number"
+locator = "page 1, question (c)"
+part = "(c)"
+informal = "Deduce Dirichlet's class number formula `h(-p) = -\\frac{1}{p} \\sum_{a=1}^{p-1} a\\, \\chi(a)`$."
+
+[[steps]]
+id = "d1_half_sum"
+locator = "page 1, question (d), displayed formula"
+part = "(d), formula"
+informal = """
+Let `A = \\sum_{0 < a < p/2} \\chi(a)`$, which is the number of quadratic residues minus the number of
+non-residues in the interval `(0, p/2)`$. Prove that `h(-p) = \\frac{A}{2 - \\chi(2)}`$, which equals `A`$ when
+`p \\equiv 7 \\pmod{8}`$ and `A/3`$ when `p \\equiv 3 \\pmod{8}`$.
+"""
+
+[[steps]]
+id = "d2_excess_positive"
+locator = "page 1, question (d), last sentence"
+part = "(d), conclusion"
+informal = "Conclude that `A > 0`$: in `(0, p/2)`$ there are strictly more quadratic residues than non-residues modulo `p`$."
+
+[[steps]]
+id = "e1_check_23_47"
+locator = "page 1, question (e), first sentence"
+part = "(e), computation"
+informal = "Use both formulas to compute `h(-23)`$ and `h(-47)`$, and confirm that they agree."
+
+[[steps]]
+id = "e2_p_equals_3"
+locator = "page 1, question (e), last sentence"
+part = "(e), the case p = 3"
+informal = "Explain why the formula in (c) needs a correction when `p = 3`$."

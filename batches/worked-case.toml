@@ -1,0 +1,4 @@
+# The book's worked case for chapter 3.
+id = "worked-case"
+title = "Exercise E1: Dirichlet's class number formula"
+problems = ["class-number"]

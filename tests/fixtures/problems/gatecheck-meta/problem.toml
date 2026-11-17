@@ -1,0 +1,15 @@
+# Test problem for the gate with Lean's metaprogramming library in scope, as it is
+# whenever Mathlib is imported. Never sent to a model.
+id = "gatecheck-meta"
+title = "Gate self-test, metaprogramming in scope"
+source = "Written for the test suite."
+status = "known"
+imports = ["Lean"]
+informal = "A false statement. Any accepted proof of it is a hole in the gate."
+
+[[steps]]
+id = "false_claim"
+informal = "One equals two. It does not."
+theorem = "false_claim"
+signature = ": (1 : Nat) = 2"
+formalised_by = "test suite"

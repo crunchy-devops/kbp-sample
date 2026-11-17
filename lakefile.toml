@@ -1,0 +1,10 @@
+name = "zerotrust"
+version = "0.4.1"
+# No Lean library of our own: this package exists to pin the toolchain and Mathlib,
+# so that every statement and every attempt is checked against the same versions.
+defaultTargets = []
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.35.0"

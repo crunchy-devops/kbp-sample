@@ -1,0 +1,78 @@
+# Exercise E2 of "Zero-trust AI": the Fermat-three equation.
+#
+# The statement is the author's, given on 16 November 2026. The Lean statements and
+# the definition of the named assumption below were written by the platform's build
+# thread and have NOT been reviewed by a number theorist. Until they are, a proof
+# accepted here proves the Lean statement, and nobody has yet vouched that the
+# Lean statement is the exercise.
+#
+# The context pack for this problem is context.yaml, next to this file.
+
+id = "fermat-three"
+title = "The equation x^p + y^p = 3 z^p has no primitive solution for a prime p >= 5"
+source = "Exercise given by the author on 16 November 2026. Its context pack names the source as \"Advanced Number Theory Exercise, Exercise 1\"; that document has not been supplied."
+status = "known"
+imports = ["Mathlib"]
+
+informal = '''
+Let `p \ge 5`$ be a prime. Prove that the Diophantine equation `x^p + y^p = 3z^p`$ has no solutions in non-zero integers `x`$, `y`$, `z`$ such that `\gcd(x, y, z) = 1`$.
+
+The known proof is the modular method: a solution gives a Frey-Hellegouarch curve, and Mazur, Wiles, Taylor-Wiles and Ribet together attach to it a weight-2 newform of level dividing 6, of which there are none. None of that machinery is in Mathlib. It enters here as one named assumption, `FreyLevelSix`, which is a hypothesis of the final theorem and never an axiom. What is left to prove in Lean is the elementary part: that a solution really does produce a triple to which the assumption applies.
+'''
+
+preamble = '''
+namespace Fermat3
+
+/-- `IsFreyTriple p A B C`: the integers `A`, `B`, `C` are in the normal form to which
+the modular method applies with exponent `p` and level dividing 6. They sum to zero,
+`B` is non-zero, `A` and `B` are coprime, `A ≡ -1 (mod 4)`, `32 ∣ B`, and every prime
+other than 2 and 3 divides the product `A * B * C` to a power that is a multiple of `p`.
+The curve behind it is `Y ^ 2 = X * (X - A) * (X + B)`. -/
+def IsFreyTriple (p : ℕ) (A B C : ℤ) : Prop :=
+  A + B + C = 0 ∧ B ≠ 0 ∧ IsCoprime A B ∧ A % 4 = 3 ∧ (32 : ℤ) ∣ B ∧
+    ∀ q : ℕ, q.Prime → q ≠ 2 → q ≠ 3 → p ∣ padicValInt q (A * B * C)
+
+/-- The named assumption. For a prime `p ≥ 5` there is no Frey triple.
+
+It stands for: the Frey-Hellegouarch curve of the triple is semistable; its mod `p`
+representation is irreducible (Mazur) and modular (Wiles, Taylor-Wiles); level
+lowering (Ribet) brings the level down to a divisor of 6; and there is no weight-2
+newform of level dividing 6. -/
+def FreyLevelSix : Prop :=
+  ∀ (p : ℕ) (A B C : ℤ), p.Prime → 5 ≤ p → ¬ IsFreyTriple p A B C
+
+end Fermat3
+'''
+
+[document]
+kind = "exercise"
+
+[[steps]]
+id = "coprime"
+part = "(1)"
+locator = "Step 1 of the reduction; not a numbered part of the exercise"
+informal = "In a solution with `\\gcd(x, y, z) = 1`$, the integers `x`$, `y`$, `z`$ are pairwise coprime: a prime dividing two of them divides the `p`$-th power of the third, up to the factor 3, and hence the third."
+theorem = "Fermat3.pairwise_coprime"
+signature = "(p : ℕ) (hp : p.Prime) (x y z : ℤ) (hgcd : Int.gcd (Int.gcd x y) z = 1) (h : x ^ p + y ^ p = 3 * z ^ p) : IsCoprime x y ∧ IsCoprime x z ∧ IsCoprime y z"
+formalised_by = "Claude, in the platform build thread, 16 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "frey"
+part = "(2)"
+locator = "Step 2 of the reduction; not a numbered part of the exercise"
+informal = "A solution in non-zero integers with `\\gcd(x, y, z) = 1`$ gives a Frey triple: exactly one of `x`$, `y`$, `z`$ is even, and a suitable ordering of `x^p`$, `y^p`$ and `-3z^p`$ has the even term in the middle, divisible by `2^p`$ and so by 32, and a first term congruent to `-1`$ modulo 4."
+theorem = "Fermat3.frey_triple"
+signature = "(p : ℕ) (hp : p.Prime) (hp5 : 5 ≤ p) (x y z : ℤ) (hx : x ≠ 0) (hy : y ≠ 0) (hz : z ≠ 0) (hgcd : Int.gcd (Int.gcd x y) z = 1) (h : x ^ p + y ^ p = 3 * z ^ p) : ∃ A B C : ℤ, IsFreyTriple p A B C"
+formalised_by = "Claude, in the platform build thread, 16 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "main"
+part = "(3)"
+locator = "The exercise itself"
+informal = "Assuming `FreyLevelSix`, for a prime `p \\ge 5`$ the equation `x^p + y^p = 3z^p`$ has no solution in non-zero integers with `\\gcd(x, y, z) = 1`$."
+theorem = "Fermat3.fermat_three"
+signature = "(hFrey : FreyLevelSix) (p : ℕ) (hp : p.Prime) (hp5 : 5 ≤ p) (x y z : ℤ) (hx : x ≠ 0) (hy : y ≠ 0) (hz : z ≠ 0) (hgcd : Int.gcd (Int.gcd x y) z = 1) : x ^ p + y ^ p ≠ 3 * z ^ p"
+formalised_by = "Claude, in the platform build thread, 16 November 2026"
+reviewed_by = ""
