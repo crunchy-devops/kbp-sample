@@ -66,7 +66,13 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No ANTHROPIC_API_KEY secret in this repository, so no model was asked and nothing was recorded."
+            echo "No repository secret named ANTHROPIC_API_KEY is visible to this workflow. No model was asked and nothing was recorded." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              # Somebody asked for this run. A green tick over nothing at all would be a lie.
+              echo "::error::No repository secret named ANTHROPIC_API_KEY, so no model was asked and nothing was recorded."
+              exit 1
+            fi
+            echo "::notice::No repository secret named ANTHROPIC_API_KEY, so no model was asked and nothing was recorded."
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +108,13 @@ jobs:
           RUN0="$(ztproof init --batch "$GOLDEN_BATCH" --max-attempts "$MAX_ATTEMPTS" --run-id "$(date -u +%Y%m%dT%H%M%SZ)-gh${GITHUB_RUN_NUMBER}-stage0")"
           echo "RUN0=$RUN0" >> "$GITHUB_ENV"
           echo "RUN0_ID=$(basename "$RUN0")" >> "$GITHUB_ENV"
+
+      # A gate that has never been seen to fail cannot be trusted. Every file under
+      # canaries/ makes one forbidden move against a pinned claim; each has to be
+      # rejected, and for its own reason, or the run stops here.
+      - name: "Stage 0: every canary is rejected, each for its own reason (no model)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof canaries --run "$RUN0" --summary
 
       - name: "Stage 0: golden statements elaborate"
         if: steps.key.outputs.present == 'true'

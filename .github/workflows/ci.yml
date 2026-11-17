@@ -37,6 +37,9 @@ jobs:
       - name: Gate self-test (honest proofs accepted, cheats rejected)
         run: pytest -q
 
+      - name: Every canary is rejected, each for its own reason
+        run: ztproof canaries --summary
+
       - name: The golden set's reference proofs pass the gate
         run: ztproof golden
 

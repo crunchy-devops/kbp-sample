@@ -2,6 +2,39 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.5.0, 17 November 2026
+
+Canaries: the gate seen to fail, on purpose, on every run.
+
+### What is new
+
+* **A `canaries/` folder.** Twelve submissions, each making one forbidden move against a real pinned claim: five against the Fermat-three exercise, seven against the golden set. Each file names its move and the rejection it must get.
+* **`ztproof canaries`.** Sends every canary through the gate, with no model and no key. It fails if a canary is accepted, if one is rejected for a reason other than its own, or if the folder lacks one of the five required moves: `sorry`, `axiom`, `native_decide`, `weakened_statement`, `added_hypothesis`.
+* **On every run.** CI runs the canaries on every push. The Prove workflow runs them at the start of Stage 0, before any model is asked, and keeps the results in the golden run as `canaries.json`.
+* **A calibration criterion.** "Every canary was rejected, and for its own reason" is enforced whenever the canaries were run with the calibration, and reported as not run otherwise.
+
+### What went wrong
+
+1. **The platform said it had canaries, and had fixtures.** Version 0.4.0 mapped the author's `canaries/` folder to `tests/fixtures/gate/`. Those twenty-one files do test the gate, but against toy statements, and only when somebody runs the tests. Nothing sent a known cheat for a real claim through the gate before a real run, on the machine doing the run. The author asked how to set the feature up, and the truthful answer was that it had not been.
+2. **Checked with part of Mathlib only, so far.** The build machine has a part of Mathlib built from source and not the whole library. The five Fermat-three canaries were sent through the gate there with the problem's import narrowed to the modules that exist, and each was rejected for its own reason. Their first run against the full library is the CI run of this version.
+
+### What it does not do
+
+* No `native_decide` canary for the Fermat-three claims. That move only does harm inside an otherwise finished proof, and there is none. It is covered on a golden claim.
+* Canaries cover the cheats somebody thought of. The list is short and will stay shorter than the list of cheats.
+
+## 0.4.2, 17 November 2026
+
+The first run with a key, which turned out to be a run without one.
+
+### What went wrong
+
+1. **A green tick over nothing.** On 17 November the author reported the model key as added, and Stage 0 was started by hand. The run finished in eight seconds with a green tick. It had found no secret named `ANTHROPIC_API_KEY`, skipped all 45 steps that follow the check, and said so in a notice that nobody reads on a green run. The run after the merge did the same. The build thread then told the author that the first real run had started, which was true of the run and false of everything the sentence was meant to convey; the message was corrected about a quarter of an hour later. A check that passes by doing nothing is the oldest trick in the book this repository is for, and the workflow played it on its own maintainers.
+
+### What changed
+
+* A Prove run started by hand now fails when the key is missing. A run started by a push still ends quietly, with the reason in the job summary as well as in a notice.
+
 ## 0.4.1, 16 November 2026
 
 The first CI run, and the first thing it found.
