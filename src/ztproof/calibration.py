@@ -238,6 +238,16 @@ def calibrate(run: Run, tpm_limit: int | None = None, next_imports: list[str] | 
         (", ".join(metrics["controls_accepted"]) or f"{metrics['controls']} negative control(s), none accepted")
         if metrics["controls"] else "the batch holds no negative control")
 
+    canaries_file = run.path / "canaries.json"
+    if canaries_file.is_file():
+        seen = _read_json(canaries_file)
+        dead = [r["canary"] for r in seen["results"] if not r["ok"]]
+        add("Every canary was rejected, and for its own reason", seen["complete"] and not dead,
+            ", ".join(dead + [f"no canary for: {m}" for m in seen["missing_moves"]])
+            or f"{len(seen['results'])} canaries, all rejected as expected")
+    else:
+        add("Every canary was rejected, and for its own reason", None, "the canaries were not run with this calibration")
+
     def share(value: float | None) -> str:
         return "n/a" if value is None else f"{value:.0%}"
 

@@ -50,6 +50,61 @@ Where a context pack sets a budget, one check comes before Lean runs: an attempt
 
 The test suite keeps the gate honest with twenty-one fixtures: four that must pass and seventeen that must not, among them a weakened statement, a shadowed definition, a hijacked `+`, a `sorry` hidden in a lemma, an `admit`, a `decide +native`, a named assumption promoted to an axiom, and a kernel bypass that survives every check except the fifth.
 
+## Canaries
+
+A gate that has never been seen to fail cannot be trusted. The fixtures above test the gate's code, against toy statements, when somebody runs the tests. The `canaries/` folder does something else: it holds submissions written against the **real pinned claims**, each making one forbidden move, and every one of them goes through the gate in CI and at the start of every Prove run, on the machine that is about to do the run and before any model is asked anything.
+
+A canary is one Lean file, exactly what a model would have sent, at `canaries/<problem>/<step>/<name>.lean`. Its first comments name the move it makes and the rejection it must get:
+
+```lean
+-- move: axiom
+-- expect: forbidden_axiom
+-- Declares the conclusion and uses it. It compiles without an error.
+namespace Fermat3
+
+axiom cheat (p : ℕ) (x y z : ℤ) : x ^ p + y ^ p ≠ 3 * z ^ p
+
+theorem fermat_three (hFrey : FreyLevelSix) (p : ℕ) (hp : p.Prime) (hp5 : 5 ≤ p) (x y z : ℤ)
+    (hx : x ≠ 0) (hy : y ≠ 0) (hz : z ≠ 0) (hgcd : Int.gcd (Int.gcd x y) z = 1) :
+    x ^ p + y ^ p ≠ 3 * z ^ p := cheat p x y z
+
+end Fermat3
+```
+
+That file compiles, so the second check lets it through. The fourth stops it, because `Fermat3.cheat` is not one of the three axioms allowed.
+
+`ztproof canaries` runs them all, with no model and no key, and prints one line per canary. There are three possible results, and only the first is good news.
+
+| Result | Meaning |
+| --- | --- |
+| Rejected, with the outcome named in `-- expect:` | The canary died as it should |
+| Accepted | The gate has a hole. Stop everything |
+| Rejected, with another outcome | A dead canary. A cheat that no longer compiles tests Lean's parser, not the gate, so it counts as a failure too |
+
+The command fails on either of the last two. It also fails when the folder as a whole lacks one of the five moves every set must hold: `sorry`, `axiom`, `native_decide`, `weakened_statement`, `added_hypothesis`. Other moves are welcome under any name.
+
+| Canary | Move | Must be rejected as |
+| --- | --- | --- |
+| `fermat-three/main/sorry` | The exercise, left as an exercise | `sorry` |
+| `fermat-three/main/axiom` | The conclusion declared as an axiom, then used | `forbidden_axiom` |
+| `fermat-three/main/weakened_statement` | Same name and hypotheses, conclusion `True` | `statement_mismatch` |
+| `fermat-three/main/added_hypothesis` | One more hypothesis: that there is no solution | `statement_mismatch` |
+| `fermat-three/frey/axiom` | The hard step, the Frey triple, declared and not built | `forbidden_axiom` |
+| `golden-core/sum_odds/sorry`, `axiom`, `weakened_statement`, `added_hypothesis` | The same four moves on a core Lean claim | as above |
+| `golden-core/excess_23/native_decide`, `decide_native` | A true fact checked by compiled code the kernel never sees | `forbidden_axiom` |
+| `golden-core/sub_add_cancel/declared_as_axiom` | The claim itself declared as an axiom | `not_a_theorem` |
+
+To add a canary:
+
+1. Write the Lean text a cheating model would send for one pinned claim. `ztproof prompt --problem ID --step STEP` shows the exact statement to copy.
+2. Put `-- move:` and `-- expect:` at the top. The move is a short name in lower case; the expectation is one of the rejections listed in `audit/README.md`.
+3. Save it under `canaries/<problem>/<step>/` and run `ztproof canaries --only <problem>`.
+4. Commit it. From then on it must die on every run.
+
+Two differences from the book's example are worth knowing. There, the canary "proves" `FreyLevelSix` by declaring it. Here `FreyLevelSix` is never a claim to prove: it is a hypothesis of the final theorem, so declaring it gains a cheat nothing, and the canaries declare the conclusion and the Frey triple step, which would. And the Fermat-three claims have no `native_decide` canary, because `native_decide` only does harm inside an otherwise finished proof, and nobody has one. That move is covered on a golden claim.
+
+Canaries show that the gate stops the cheats somebody thought of. They say nothing about the ones nobody did, which is why `leanchecker` and the allow-list do not depend on a list of known tricks.
+
 ## Quick start
 
 You need Python 3.11 or later and the Lean toolchain named in `lean-toolchain`, installed with [elan](https://github.com/leanprover/elan).
@@ -59,6 +114,7 @@ pip install -e '.[dev]'
 lake exe cache get        # fetches the Mathlib build; a few minutes, once
 
 pytest -q                 # the gate against its own cheats
+ztproof canaries          # every canary is rejected, each for its own reason
 ztproof problems          # what is pinned, and what has been reviewed
 ztproof check             # every pinned statement elaborates
 ztproof golden            # the golden set's reference proofs pass the gate
@@ -90,6 +146,7 @@ The golden set has two halves.
 | --- | --- |
 | The run completed, and every golden statement elaborates | Yes |
 | No false statement was accepted | Yes |
+| Every canary was rejected, and for its own reason | Yes, when the canaries were run with the calibration, as the workflow does |
 | Pass rate: share of golden claims proved within the attempts allowed | Yes, 100 % |
 | Pass@1: share proved at the first attempt | Reported. No threshold until a baseline has been measured |
 | Peak memory of one Lean process | Reported. No limit set yet |
@@ -113,9 +170,9 @@ Three things in the usual description of such a stage are not here, and the repo
 
 Two workflows, in `.github/workflows/`.
 
-**CI** runs on every push and needs no secret. It runs the gate's test suite, checks the golden set against its reference proofs, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
+**CI** runs on every push and needs no secret. It runs the gate's test suite, sends every canary through the gate, checks the golden set against its reference proofs, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
 
-**Prove** runs when a problem, a batch, a prompt or the golden set changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow runs Stage 0 first. On a no-go the job fails there, the calibration is committed to `audit/runs/`, and no document of the batch is touched. On a go it starts a run for the batch it was given, with the worker pools Stage 0 computed, alternates "ask the model" and "verify in Lean" for up to eight rounds, commits both runs to `audit/runs/` and any accepted proof to `proofs/`, and prints the calibration and the referee report as the job summary.
+**Prove** runs when a problem, a batch, a prompt or the golden set changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow runs Stage 0 first, and Stage 0 begins with the canaries: if one of them is accepted, or dies of the wrong thing, the job stops before a single token is spent. The results are kept in the golden run as `canaries.json`. On a no-go the job fails there, the calibration is committed to `audit/runs/`, and no document of the batch is touched. On a go it starts a run for the batch it was given, with the worker pools Stage 0 computed, alternates "ask the model" and "verify in Lean" for up to eight rounds, commits both runs to `audit/runs/` and any accepted proof to `proofs/`, and prints the calibration and the referee report as the job summary.
 
 The key and the untrusted Lean code never share a step. Steps that ask the model hold the key and run no Lean; steps that verify run Lean and hold no key. This is why the rounds are written out one by one in the workflow, which is less elegant than a loop and rather the point.
 
@@ -167,7 +224,7 @@ The author's example describes one exercise as a Lean project, `fermat3/`, with 
 | `Fermat3/Challenge.lean` | Human | Each `[[steps]]` entry, written out as `ZtStatement.lean` with `:= sorry` |
 | `Fermat3/Solution.lean` | Model | The one `lean` block of a reply, kept as `attempt.lean`. The only text a model writes |
 | `Fermat3/Audit.lean` | Human | `lean/Gate.lean`, which reads the axioms from the compiled module where `#print axioms` would print them |
-| `canaries/` | Human | `tests/fixtures/gate/`, and the false statement of `golden-controls` |
+| `canaries/` | Human | `canaries/<problem>/<step>/`, run by `ztproof canaries`. Also `tests/fixtures/gate/` and the false statement of `golden-controls` |
 | `agents/context.yaml` | Human | `problems/<id>/context.yaml` |
 | `agents/prompts/` | Human | `prompts/v2/` |
 | `agents/orchestrator.py` | Human | `src/ztproof/pipeline.py` |

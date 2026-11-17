@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import __version__, calibration, gate, lean
+from . import __version__, calibration, canary, gate, lean
 from .generator import DEFAULT_EFFORT, DEFAULT_MODEL
 from .pipeline import (BATCHES_DIR, PROBLEMS_DIR, Run, check_statements, generate_round, init_run,
                        recheck_proofs, verify_round)
@@ -94,6 +94,36 @@ def cmd_golden(args: argparse.Namespace) -> int:
                 failures += 1
                 print(f"         {r.detail}")
     return 1 if failures else 0
+
+
+def cmd_canaries(args: argparse.Namespace) -> int:
+    """Every canary through the gate. No model, no key. Fails unless each one is
+    rejected, and for the reason it was written for."""
+    problems = load_all(PROBLEMS_DIR)
+    canaries = canary.load_canaries(problems)
+    missing = canary.missing_moves(canaries)
+    if args.only:
+        canaries = [c for c in canaries if c.problem in args.only]
+        missing = []            # a partial run says nothing about the whole set
+    if not canaries:
+        print("ztproof: no canaries found under canaries/", file=sys.stderr)
+        return 1
+    results = canary.run_canaries(canaries, problems, _config(args))
+    text = canary.render(results, missing)
+    print(text)
+    if args.run:
+        calibration._write_json(Path(args.run) / "canaries.json",
+                                {"complete": not missing, "missing_moves": missing,
+                                 "results": [r.to_json() for r in results]})
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY") if args.summary else None
+    if summary_file:
+        with open(summary_file, "a", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    if missing or not all(r.ok for r in results):
+        print("ztproof: the canaries did not all die as they should. Do not trust the gate until they do.",
+              file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
@@ -315,6 +345,10 @@ def main(argv: list[str] | None = None) -> int:
         if name == "report":
             stage.add_argument("--summary", action="store_true", help="also append it to the CI job summary")
     add("golden", cmd_golden, "check the golden set's reference proofs against the gate, with no model")
+    k = add("canaries", cmd_canaries, "run every canary through the gate; each must be rejected for its own reason")
+    k.add_argument("--only", action="append", metavar="PROBLEM", help="restrict to one problem's canaries; repeatable")
+    k.add_argument("--run", help="also record the results in this run directory, as canaries.json")
+    k.add_argument("--summary", action="store_true", help="also append the table to the CI job summary")
     c = add("calibrate", cmd_calibrate, "Stage 0: go or no-go and worker pools, from a finished golden run")
     c.add_argument("--run", required=True, help="run directory of the golden batch")
     c.add_argument("--next-batch", metavar="BATCH", help="the batch this calibration is meant to clear; an empty value means every problem outside the golden sets")

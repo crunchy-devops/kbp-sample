@@ -13,6 +13,7 @@ audit/runs/<run id>/
   REPORT.md             the referee report for the run, with a summary by document
   calibration.json      Stage 0 only: criteria, measurements, worker pools, configuration
   CALIBRATION.md        Stage 0 only: the same, to be read
+  canaries.json         Stage 0 only: every canary, the rejection it had to get and the one it got
   <problem>/REPORT.md   the referee report for one document
   <problem>/<step>/
     statement.json      does the pinned statement elaborate, who formalised and reviewed it
@@ -55,6 +56,8 @@ When a problem has a context pack, `run.json` records its SHA-256 under `context
 A run of the golden batch is recorded like any other, with two differences. Its `run.json` carries the thresholds it started with, under `calibration`, so it is judged by those and not by whatever the batch file says later. And it files nothing under `proofs/`.
 
 `verdict.json` and `attempts.jsonl` give, for each gate stage, the seconds it took and the peak memory of the Lean process that ran it (`max_rss_mb`). Stage 0 sizes the worker pools from these.
+
+The workflow sends every file under `canaries/` through the gate before the golden run asks its first question, and writes the results to `canaries.json`: for each canary its move, the outcome expected, the outcome given, the gate's reason and the seconds it took. The calibration reads that file. A canary that was accepted, one that was rejected for another reason, or a set that lacks one of the five required moves, is a no-go. In practice the job has already stopped at the canaries step by then; the criterion is there so that the calibration cannot say go on its own.
 
 A run that Stage 0 cleared records the calibration under `calibrated_by` in its `run.json`. A no-go is committed as well: a batch that did not start is a result.
 

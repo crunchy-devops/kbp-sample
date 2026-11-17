@@ -109,6 +109,13 @@ jobs:
           echo "RUN0=$RUN0" >> "$GITHUB_ENV"
           echo "RUN0_ID=$(basename "$RUN0")" >> "$GITHUB_ENV"
 
+      # A gate that has never been seen to fail cannot be trusted. Every file under
+      # canaries/ makes one forbidden move against a pinned claim; each has to be
+      # rejected, and for its own reason, or the run stops here.
+      - name: "Stage 0: every canary is rejected, each for its own reason (no model)"
+        if: steps.key.outputs.present == 'true'
+        run: ztproof canaries --run "$RUN0" --summary
+
       - name: "Stage 0: golden statements elaborate"
         if: steps.key.outputs.present == 'true'
         run: ztproof statements --run "$RUN0"

@@ -205,6 +205,36 @@ def test_a_go_clears_only_the_configuration_it_measured(tmp_path: Path):
         calibration.clearance("golden-run", **same)
 
 
+@needs_lean
+def test_a_canary_that_lived_or_died_of_something_else_is_a_no_go(tmp_path: Path):
+    problems, run = start(tmp_path, only=["golden-core/sub_add_cancel"])
+    play(run, Replay(problems), tmp_path)
+    name = "Every canary was rejected, and for its own reason"
+
+    def verdict():
+        result = calibration.calibrate(run)
+        return result.go, next(c for c in result.criteria if c.name == name)
+
+    go, criterion = verdict()
+    assert go and criterion.passed is None and "not run" in criterion.detail     # reported as missing, not as passed
+
+    row = {"canary": "golden-core/sum_odds/axiom", "move": "axiom", "expect": "forbidden_axiom",
+           "outcome": "forbidden_axiom", "ok": True, "reason": "", "seconds": 1.0}
+    record = run.path / "canaries.json"
+    record.write_text(json.dumps({"complete": True, "missing_moves": [], "results": [row]}))
+    go, criterion = verdict()
+    assert go and criterion.passed is True
+
+    record.write_text(json.dumps({"complete": True, "missing_moves": [],
+                                  "results": [{**row, "outcome": "accepted", "ok": False}]}))
+    go, criterion = verdict()
+    assert not go and criterion.passed is False and "golden-core/sum_odds/axiom" in criterion.detail
+
+    record.write_text(json.dumps({"complete": False, "missing_moves": ["native_decide"], "results": [row]}))
+    go, criterion = verdict()
+    assert not go and "no canary for: native_decide" in criterion.detail
+
+
 BASE = 'id = "p"\ntitle = "P"\nsource = "s"\nstatus = "{status}"\ninformal = "x"\n[[steps]]\nid = "a"\ninformal = "x"\n' \
        'theorem = "t"\nsignature = ": True"\nformalised_by = "me"\nexpect = "{expect}"\n'
 
