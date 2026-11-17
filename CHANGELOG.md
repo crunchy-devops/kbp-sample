@@ -2,6 +2,18 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.4.2, 17 November 2026
+
+The first run with a key, which turned out to be a run without one.
+
+### What went wrong
+
+1. **A green tick over nothing.** On 17 November the author reported the model key as added, and Stage 0 was started by hand. The run finished in eight seconds with a green tick. It had found no secret named `ANTHROPIC_API_KEY`, skipped all 45 steps that follow the check, and said so in a notice that nobody reads on a green run. The run after the merge did the same. The build thread then told the author that the first real run had started, which was true of the run and false of everything the sentence was meant to convey; the message was corrected about a quarter of an hour later. A check that passes by doing nothing is the oldest trick in the book this repository is for, and the workflow played it on its own maintainers.
+
+### What changed
+
+* A Prove run started by hand now fails when the key is missing. A run started by a push still ends quietly, with the reason in the job summary as well as in a notice.
+
 ## 0.4.1, 16 November 2026
 
 The first CI run, and the first thing it found.

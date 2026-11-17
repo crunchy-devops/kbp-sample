@@ -66,7 +66,13 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No ANTHROPIC_API_KEY secret in this repository, so no model was asked and nothing was recorded."
+            echo "No repository secret named ANTHROPIC_API_KEY is visible to this workflow. No model was asked and nothing was recorded." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              # Somebody asked for this run. A green tick over nothing at all would be a lie.
+              echo "::error::No repository secret named ANTHROPIC_API_KEY, so no model was asked and nothing was recorded."
+              exit 1
+            fi
+            echo "::notice::No repository secret named ANTHROPIC_API_KEY, so no model was asked and nothing was recorded."
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
