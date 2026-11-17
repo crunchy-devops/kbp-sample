@@ -2,6 +2,30 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.6.0, 17 November 2026
+
+The training ladder: classic exercises from A-level to PhD, pinned in order.
+
+### What is new
+
+* **Four new problems**, one per rung: `training-1-a-level`, `training-2-first-year`, `training-3-final-year` and `training-4-masters`. Fourteen Lean statements, each with its informal text. The fifth rung is the Fermat-three exercise, already pinned.
+* **A context pack per rung**, naming the level, the conventions and a budget that grows with the rungs: 4 attempts at A-level, 8 at master's and PhD.
+* **A batch, `training`**, which runs the five rungs in order.
+* **Four more canaries**, on the two rungs that need no library, so they cost seconds.
+* The list is shared with the book: it is chapter 5 of the outline, agreed with the book's thread on the day.
+
+### What went wrong
+
+1. **The prompt said something untrue about the pack.** Since 0.4.0 the prompt told the model that the context pack "was written by people, not by a model". That was true of the one pack that existed, the author's. The four packs added here were written by the build thread, which is a model, so the sentence became false the moment they were saved. It now says what the platform can vouch for: the pack was fixed before the run and does not change during it. The prompt is still called `v2`, because no model has ever been sent it. The README and a docstring made the same claim about statements and packs, and were corrected too.
+2. **A hand-started run failed, as designed.** After the merge of 0.5.0, Stage 0 was started by hand to see whether the model key had arrived. It had not: the run failed in eight seconds at the key check, with an error and not a green tick. That is the first time the change of 0.4.2 ran for real. `audit/runs/` is still empty.
+3. **One statement could not be checked on the build machine.** The uniqueness of a limit needs the real numbers, which are not in the part of Mathlib built there. The eight statements of the first two rungs elaborate there as they are. The five other Mathlib statements elaborate there with the import narrowed to the modules that exist. The CI run of this version is the first to check all six against the whole library.
+
+### What it does not do
+
+* **It cannot forbid a library theorem.** On rungs 3 and 4 Mathlib already holds five of the six results in some form, and a proof that cites the library is accepted. The first two rungs avoid the question by importing nothing.
+* **It does not record a reader's attempt.** `ztproof gate` checks a file by hand, through the same gate, and keeps nothing.
+* **No statement has been reviewed by a person.** One exercise, the first, has been proved by hand and accepted, as a test. Nothing else has been proved by anybody, and no model has been asked.
+
 ## 0.5.0, 17 November 2026
 
 Canaries: the gate seen to fail, on purpose, on every run.

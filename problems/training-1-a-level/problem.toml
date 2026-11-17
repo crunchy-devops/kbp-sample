@@ -1,0 +1,72 @@
+# The training ladder, rung 1 of 5: A-level.
+#
+# The ladder is a progression of classic exercises, from A-level to PhD, for the
+# book's chapter on learning Lean 4. Every statement below was written by the
+# platform's build thread and has NOT been reviewed by a person. No solution is
+# kept here: a proof enters the repository through the gate, from a real run.
+#
+# The context pack for this rung is context.yaml, next to this file.
+
+id = "training-1-a-level"
+title = "Training ladder, rung 1 (A-level): four proofs every sixth-former meets"
+source = "Classic exercises; folklore. Chosen for the book's Lean 4 training chapter on 17 November 2026."
+status = "known"
+imports = []
+
+informal = '''
+Four classic exercises of the A-level proof syllabus: one induction, one contrapositive and the two standard proofs by contradiction. They are independent of each other. Nothing is imported: Lean's core library only, so each proof has to be carried out and cannot be looked up.
+'''
+
+preamble = '''
+namespace Ladder
+
+/-- The sum `1 + 2 + ... + n`. -/
+def sumTo : Nat → Nat
+  | 0 => 0
+  | n + 1 => sumTo n + (n + 1)
+
+/-- `IsPrime p`: `p` is at least 2 and its only divisors are 1 and itself. -/
+def IsPrime (p : Nat) : Prop :=
+  2 ≤ p ∧ ∀ d : Nat, d ∣ p → d = 1 ∨ d = p
+
+end Ladder
+'''
+
+[document]
+kind = "exercise"
+
+[[steps]]
+id = "triangular"
+part = "(a)"
+informal = "For every natural number `n`$, `1 + 2 + \\cdots + n = \\frac{n(n+1)}{2}`$. Stated without division: `2(1 + 2 + \\cdots + n) = n(n+1)`$."
+theorem = "Ladder.two_mul_sumTo"
+signature = "(n : Nat) : 2 * sumTo n = n * (n + 1)"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "even_square"
+part = "(b)"
+informal = "If `n^2`$ is even, then `n`$ is even."
+theorem = "Ladder.even_of_sq_even"
+signature = "(n : Nat) (h : n ^ 2 % 2 = 0) : n % 2 = 0"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "sqrt_two"
+part = "(c)"
+informal = "`\\sqrt{2}`$ is irrational. Stated on the natural numbers, with no square root and no fraction: if `a^2 = 2b^2`$ then `b = 0`$."
+theorem = "Ladder.sqrt_two_irrational"
+signature = "(a b : Nat) (h : a ^ 2 = 2 * b ^ 2) : b = 0"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "primes"
+part = "(d)"
+informal = "There are infinitely many primes: above every natural number `n`$ there is a prime."
+theorem = "Ladder.infinitely_many_primes"
+signature = "(n : Nat) : ∃ p : Nat, n < p ∧ IsPrime p"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""

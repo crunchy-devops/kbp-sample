@@ -1,0 +1,9 @@
+# The training ladder: classic exercises from A-level to PhD, in order.
+#
+# Rungs 1 and 2 import nothing, so every proof has to be carried out by hand.
+# Rungs 3 and 4 import Mathlib. Rung 5 is the book's worked exercise, which takes
+# one named assumption. The order below is the order of the rungs.
+
+id = "training"
+title = "Training ladder: classic exercises from A-level to PhD"
+problems = ["training-1-a-level", "training-2-first-year", "training-3-final-year", "training-4-masters", "fermat-three"]

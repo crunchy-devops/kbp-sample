@@ -1,6 +1,6 @@
 # Context pack
 
-This is everything you are told about the problem beyond its statement. It was written by people, not by a model, and it is the same for every attempt.
+This is everything you are told about the problem beyond its statement. It was fixed before the run started, it is the same for every attempt, and nothing in it changes while you work.
 
 Level: {{level}}. Field: {{field}}.
 

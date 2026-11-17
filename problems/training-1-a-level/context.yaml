@@ -1,0 +1,40 @@
+# Context pack for rung 1 of the training ladder: A-level.
+# Written by the platform's build thread on 17 November 2026, and not yet reviewed by
+# a person. The same for every attempt; never changed during a run.
+
+problem:
+  id: training-1-a-level
+  informal: >
+    Four classic exercises of the A-level proof syllabus: one induction, one contrapositive and the two standard proofs by contradiction. They are independent of each other. Nothing is imported: Lean's core library only, so each proof has to be carried out and cannot be looked up.
+  level: "rung 1 of 5, A-level"
+  field: "proof by induction, by contrapositive and by contradiction"
+  source: "classic exercises, folklore"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+
+imports: []                # Lean's core library only
+
+conventions:
+  - "Numbers are natural numbers (type Nat). Subtraction and division of natural numbers round down to a natural number; none of the statements uses either."
+  - "Even is written n % 2 = 0. Prime is IsPrime, defined in the fixed lines; it is not Mathlib's Nat.Prime."
+  - "Nothing is imported. Core tactics such as induction, cases, omega, simp, decide and calc are available."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib:
+  - "Mathlib: no Nat.Prime, no Nat.exists_infinite_primes, no irrational_sqrt_two"
+  - "Mathlib's tactics: ring, linarith, nlinarith, positivity, norm_num"
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 4
+  max_seconds_per_build: 120
+  max_heartbeats: 200000

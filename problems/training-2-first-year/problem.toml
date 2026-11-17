@@ -1,0 +1,67 @@
+# The training ladder, rung 2 of 5: first-year undergraduate.
+#
+# The ladder is a progression of classic exercises, from A-level to PhD, for the
+# book's chapter on learning Lean 4. Every statement below was written by the
+# platform's build thread and has NOT been reviewed by a person. No solution is
+# kept here: a proof enters the repository through the gate, from a real run.
+#
+# The context pack for this rung is context.yaml, next to this file.
+
+id = "training-2-first-year"
+title = "Training ladder, rung 2 (first-year undergraduate): four classics of the first proofs course"
+source = "Classic exercises; folklore. Chosen for the book's Lean 4 training chapter on 17 November 2026."
+status = "known"
+imports = []
+
+informal = '''
+Four classic exercises of a first university course in proof. They are independent of each other. Nothing is imported: Lean's core library only.
+'''
+
+preamble = '''
+namespace Ladder
+
+/-- `IsPrime p`: `p` is at least 2 and its only divisors are 1 and itself. -/
+def IsPrime (p : Nat) : Prop :=
+  2 ≤ p ∧ ∀ d : Nat, d ∣ p → d = 1 ∨ d = p
+
+end Ladder
+'''
+
+[document]
+kind = "exercise"
+
+[[steps]]
+id = "bernoulli"
+part = "(a)"
+informal = "Bernoulli's inequality, for natural numbers `x`$ and `n`$: `1 + nx \\le (1 + x)^n`$."
+theorem = "Ladder.bernoulli"
+signature = "(x n : Nat) : 1 + n * x ≤ (1 + x) ^ n"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "cantor"
+part = "(b)"
+informal = "Cantor's theorem: no map from a set `A`$ to its power set `\\mathcal{P}(A)`$ is surjective. A subset of `A`$ is given as a predicate on `A`$."
+theorem = "Ladder.cantor"
+signature = "(α : Type) (f : α → α → Prop) : ¬ Function.Surjective f"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "euclid_lemma"
+part = "(c)"
+informal = "Euclid's lemma: if a prime `p`$ divides a product `ab`$, then `p \\mid a`$ or `p \\mid b`$."
+theorem = "Ladder.euclid_lemma"
+signature = "(p a b : Nat) (hp : IsPrime p) (h : p ∣ a * b) : p ∣ a ∨ p ∣ b"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "pigeonhole"
+part = "(d)"
+informal = "The pigeonhole principle: `n + 1`$ pigeons in `n`$ holes put two pigeons in one hole. A map from a set of `n + 1`$ elements to a set of `n`$ elements takes two different elements to the same value."
+theorem = "Ladder.pigeonhole"
+signature = "(n : Nat) (f : Fin (n + 1) → Fin n) : ∃ i j : Fin (n + 1), i ≠ j ∧ f i = f j"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""

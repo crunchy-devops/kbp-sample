@@ -1,0 +1,48 @@
+# The training ladder, rung 3 of 5: final-year undergraduate.
+#
+# The ladder is a progression of classic exercises, from A-level to PhD, for the
+# book's chapter on learning Lean 4. Every statement below was written by the
+# platform's build thread and has NOT been reviewed by a person. No solution is
+# kept here: a proof enters the repository through the gate, from a real run.
+#
+# The context pack for this rung is context.yaml, next to this file.
+
+id = "training-3-final-year"
+title = "Training ladder, rung 3 (final-year undergraduate): analysis, algebra and number theory"
+source = "Classic exercises; folklore. Chosen for the book's Lean 4 training chapter on 17 November 2026."
+status = "known"
+imports = ["Mathlib"]
+
+informal = '''
+Three classic exercises, one from each of the courses a mathematics degree is built on. They are independent of each other. Mathlib is imported, and it already holds each result in some form: a proof that cites the library is a proof, and the report will show it for what it is.
+'''
+
+[document]
+kind = "exercise"
+
+[[steps]]
+id = "limit_unique"
+part = "(a)"
+informal = "The limit of a real sequence is unique. If `(u_n)`$ converges to `a`$ and to `b`$, in the `\\varepsilon`$-`N`$ sense, then `a = b`$."
+theorem = "Ladder.limit_unique"
+signature = "(u : ℕ → ℝ) (a b : ℝ) (ha : ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N, |u n - a| < ε) (hb : ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N, |u n - b| < ε) : a = b"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "exponent_two"
+part = "(b)"
+informal = "A group in which every element satisfies `g^2 = 1`$ is abelian."
+theorem = "Ladder.comm_of_sq_eq_one"
+signature = "(G : Type) [Group G] (h : ∀ g : G, g * g = 1) (a b : G) : a * b = b * a"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "fermat_little"
+part = "(c)"
+informal = "Fermat's little theorem: for a prime `p`$ and every integer `a`$, `p \\mid a^p - a`$."
+theorem = "Ladder.fermat_little"
+signature = "(p : ℕ) (hp : p.Prime) (a : ℤ) : (p : ℤ) ∣ a ^ p - a"
+formalised_by = "Claude, in the platform build thread, 17 November 2026"
+reviewed_by = ""
