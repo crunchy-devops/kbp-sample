@@ -25,8 +25,8 @@ Before any batch, the same pipeline is run on a golden set. This is Stage 0, des
 
 | Stage | Where | Trusted? |
 | --- | --- | --- |
-| Document, claims and Lean statements | `problems/<id>/problem.toml`, `batches/` | Written and reviewed by people. The one input the kernel cannot check |
-| Context pack | `problems/<id>/context.yaml`, `src/ztproof/context.py` | Written by people, and checked against the repository's own pins. What it forbids is enforced by the gate, not by the model's goodwill |
+| Document, claims and Lean statements | `problems/<id>/problem.toml`, `batches/` | Pinned by hand before a run. Each statement names who wrote it and who reviewed it; today none has been reviewed. The one input the kernel cannot check |
+| Context pack | `problems/<id>/context.yaml`, `src/ztproof/context.py` | Written before a run, and checked against the repository's own pins. What it forbids is enforced by the gate, not by the model's goodwill |
 | Prompt | `prompts/v2/`, `src/ztproof/prompt.py` | Versioned text, fingerprinted in every record |
 | Model call | `src/ztproof/generator.py` | No. The reply is an untrusted input |
 | Gate | `lean/Gate.lean`, `src/ztproof/gate.py` | Yes, and it is short enough to read in one sitting |
@@ -93,6 +93,10 @@ The command fails on either of the last two. It also fails when the folder as a 
 | `golden-core/sum_odds/sorry`, `axiom`, `weakened_statement`, `added_hypothesis` | The same four moves on a core Lean claim | as above |
 | `golden-core/excess_23/native_decide`, `decide_native` | A true fact checked by compiled code the kernel never sees | `forbidden_axiom` |
 | `golden-core/sub_add_cancel/declared_as_axiom` | The claim itself declared as an axiom | `not_a_theorem` |
+| `training-1-a-level/primes/axiom` | Euclid's theorem declared, then cited | `forbidden_axiom` |
+| `training-1-a-level/sqrt_two/weakened_statement` | Same hypothesis, a conclusion true of every number | `statement_mismatch` |
+| `training-2-first-year/euclid_lemma/added_hypothesis` | Euclid's lemma, assuming the conclusion | `statement_mismatch` |
+| `training-2-first-year/pigeonhole/sorry` | The pigeons left to sort themselves out | `sorry` |
 
 To add a canary:
 
@@ -182,7 +186,7 @@ A test reads the workflow file as data and fails if any step that holds the key 
 
 ## The context pack
 
-A context pack is one YAML file per problem, `problems/<id>/context.yaml`: what the model may be told beyond the statement. It is written by people, versioned with the problem, and identical for every attempt. It is not a context map: nothing is retrieved, ranked or selected at run time, and the whole of it fits on a page.
+A context pack is one YAML file per problem, `problems/<id>/context.yaml`: what the model may be told beyond the statement. It is written before a run, versioned with the problem, and identical for every attempt. The Fermat-three pack is the author's; the four packs of the training ladder were written by the platform's build thread and wait for a person's review. It is not a context map: nothing is retrieved, ranked or selected at run time, and the whole of it fits on a page.
 
 It holds the problem in plain words, its level and field; the toolchain; the imports; the conventions of the formalisation; the **named assumptions**, each with what it stands for and who reviewed it; what is *not* in Mathlib, so that the model does not go looking or invent names; what is forbidden; and a budget.
 
@@ -235,6 +239,37 @@ The author's example describes one exercise as a Lean project, `fermat3/`, with 
 | `.github/workflows/proof-gates.yml` | Human | `ci.yml` and `prove.yml` |
 | `tools/` | Model, then human review | Not built. The model has no tools here and writes no code but its one Lean block |
 
+## The training ladder
+
+The book has a chapter on learning Lean 4 by a progression of classic exercises, from A-level to PhD. The platform pins the same list, as the batch `training`: five rungs, one problem per rung, fifteen exercises. Each rung has a context pack that names its level, and the budget grows as the rungs do.
+
+| Rung | Level | Problem | Imports | Exercises |
+| --- | --- | --- | --- | --- |
+| 1 | A-level | `training-1-a-level` | Nothing | (a) `1 + 2 + \cdots + n = \frac{n(n+1)}{2}`$, by induction. (b) If `n^2`$ is even, `n`$ is even. (c) `\sqrt{2}`$ is irrational. (d) There are infinitely many primes |
+| 2 | First-year undergraduate | `training-2-first-year` | Nothing | (a) Bernoulli's inequality, `1 + nx \le (1 + x)^n`$. (b) Cantor's theorem. (c) Euclid's lemma. (d) The pigeonhole principle |
+| 3 | Final-year undergraduate | `training-3-final-year` | Mathlib | (a) The limit of a real sequence is unique. (b) A group with `g^2 = 1`$ for every `g`$ is abelian. (c) Fermat's little theorem |
+| 4 | Master's | `training-4-masters` | Mathlib | (a) `x^4 + y^4 = z^4`$ has no solution with `x`$, `y`$ non-zero. (b) A prime `p \equiv 1 \pmod{4}`$ is a sum of two squares. (c) The only integer solutions of `y^2 = x^3 - 2`$ are `(3, \pm 5)`$ |
+| 5 | PhD | `fermat-three` | Mathlib | The worked exercise: `x^p + y^p = 3z^p`$, under the named assumption `FreyLevelSix` |
+
+```bash
+ztproof problems                                   # every rung, every statement, who reviewed it
+ztproof prompt --problem training-1-a-level --step sqrt_two --max-attempts 4
+
+# The reader's turn: your own proof, through the same gate as the model's.
+ztproof gate --problem training-1-a-level --step triangular --file my_proof.lean
+
+# The model's turn. Needs ANTHROPIC_API_KEY and spends real tokens:
+ztproof run --batch training --jobs 4
+```
+
+Three things to know before reading a result.
+
+* **Rungs 1 and 2 import nothing.** They are stated in Lean's core library, with their own two-line definition of a prime. There is no library lemma to cite, so the proof has to be carried out. This also makes them quick to check: seconds, not minutes.
+* **Rungs 3 and 4 import Mathlib, and Mathlib already knows most of the answers.** It holds 3(a), 3(b), 3(c), 4(a) and 4(b) in some form, so a one-line citation is a valid proof and the gate accepts it. That is a lesson in using a library and no lesson in descent. The gate cannot yet be told that a named theorem is off limits. To our knowledge Mathlib does not hold 4(c).
+* **Nobody has reviewed a statement.** The fourteen new statements, and the four context packs, were written by the platform's build thread on 17 November 2026. Each says so. The first exercise has been proved by hand and accepted by the gate, as a test that the rung works; no other has been proved by anybody here, and no model has been asked.
+
+A reader's attempt through `ztproof gate` is checked exactly as a model's is, and is not recorded: the audit trail holds real model runs only.
+
 ## Documents, claims and batches
 
 The unit of work is a batch of documents. A document is a preprint, an exercise or a note; its claims are the steps we pin for it; and a batch is a named list of documents in `batches/`, run together.
@@ -258,7 +293,7 @@ Formulas in the informal text use the manuscript's convention, a code span follo
 
 Facts a problem lets us assume, and earlier parts a later part relies on, enter a Lean statement as explicit hypotheses. They never enter as axioms, which the gate would reject in any case.
 
-Four problems are pinned today.
+Eight problems are pinned today. Four are the rungs of the training ladder, described above. The others:
 
 * `fermat-three`: the book's worked exercise. For a prime `p \ge 5`$, the equation `x^p + y^p = 3z^p`$ has no solution in non-zero integers with `\gcd(x, y, z) = 1`$. Three claims, a chain: the solution is pairwise coprime; it gives a Frey triple; and, assuming `FreyLevelSix`, there is no solution. `FreyLevelSix` stands for the modular method at level 6, none of which is in Mathlib. The Lean statements and the definition of the assumption have not been reviewed by a number theorist, and the reports say so on every page.
 * `golden-core`: five small known results in core Lean, the positive half of the golden set. If one of these fails, look at the platform before blaming the model.

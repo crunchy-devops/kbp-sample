@@ -1,0 +1,40 @@
+# Context pack for rung 4 of the training ladder: master's.
+# Written by the platform's build thread on 17 November 2026, and not yet reviewed by
+# a person. The same for every attempt; never changed during a run.
+
+problem:
+  id: training-4-masters
+  informal: >
+    Three classic results of a master's course in number theory, each a Diophantine equation, each the standard example of a method: Fermat's descent, the two-squares theorem, and unique factorisation in Z[sqrt(-2)]. They are independent of each other. Mathlib is imported. It holds the first two in some form; to our knowledge it does not hold the third.
+  level: "rung 4 of 5, master's"
+  field: "number theory: infinite descent, sums of two squares, arithmetic of quadratic rings"
+  source: "classic exercises, folklore"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+  mathlib: v4.35.0
+
+imports:
+  - Mathlib
+
+conventions:
+  - "x, y, z are integers (type ℤ). The prime p is a natural number with p.Prime."
+  - "State 'no solution' as an inequality: x ^ 4 + y ^ 4 ≠ z ^ 4."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib:
+  - "a ready-made statement of the equation y^2 = x^3 - 2, to our knowledge"
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 8
+  max_seconds_per_build: 600
+  max_heartbeats: 400000

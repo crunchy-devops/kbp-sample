@@ -1,0 +1,40 @@
+# Context pack for rung 3 of the training ladder: final-year undergraduate.
+# Written by the platform's build thread on 17 November 2026, and not yet reviewed by
+# a person. The same for every attempt; never changed during a run.
+
+problem:
+  id: training-3-final-year
+  informal: >
+    Three classic exercises, one from each of the courses a mathematics degree is built on. They are independent of each other. Mathlib is imported, and it already holds each result in some form: a proof that cites the library is a proof, and the report will show it for what it is.
+  level: "rung 3 of 5, final-year undergraduate"
+  field: "real analysis, group theory, elementary number theory"
+  source: "classic exercises, folklore"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+  mathlib: v4.35.0
+
+imports:
+  - Mathlib
+
+conventions:
+  - "Real sequences are functions ℕ → ℝ. Convergence is written out with ε and N; it is not Filter.Tendsto."
+  - "Groups are written multiplicatively, with the class Group."
+  - "The prime p is a natural number with p.Prime; the integer a has type ℤ, and p is cast to ℤ in the divisibility."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib: []
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 6
+  max_seconds_per_build: 600
+  max_heartbeats: 400000

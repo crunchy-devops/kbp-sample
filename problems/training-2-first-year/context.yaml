@@ -1,0 +1,41 @@
+# Context pack for rung 2 of the training ladder: first-year undergraduate.
+# Written by the platform's build thread on 17 November 2026, and not yet reviewed by
+# a person. The same for every attempt; never changed during a run.
+
+problem:
+  id: training-2-first-year
+  informal: >
+    Four classic exercises of a first university course in proof. They are independent of each other. Nothing is imported: Lean's core library only.
+  level: "rung 2 of 5, first-year undergraduate"
+  field: "inequalities, sets and functions, elementary number theory, counting"
+  source: "classic exercises, folklore"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+
+imports: []                # Lean's core library only
+
+conventions:
+  - "Numbers are natural numbers (type Nat). The set with n elements is Fin n."
+  - "A subset of α is a predicate α → Prop, so a map from α to its power set is f : α → α → Prop."
+  - "Prime is IsPrime, defined in the fixed lines; it is not Mathlib's Nat.Prime."
+  - "Nothing is imported. Core tactics such as induction, cases, omega, simp, decide and calc are available."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib:
+  - "Mathlib: no Nat.Prime, no Function.cantor_surjective, no Fintype, no Finset"
+  - "Mathlib's tactics: ring, linarith, nlinarith, positivity, norm_num"
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 6
+  max_seconds_per_build: 180
+  max_heartbeats: 200000

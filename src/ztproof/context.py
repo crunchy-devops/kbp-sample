@@ -1,7 +1,8 @@
 """The context pack: everything a model may be told about one problem, in one file.
 
-`problems/<id>/context.yaml` is written and reviewed by people, versioned with the
-problem, and never changed during a run. It is not a context map and there is no
+`problems/<id>/context.yaml` is written before a run, versioned with the problem,
+and never changed during a run. It is meant to be reviewed by a person, and says
+so where it has not been. It is not a context map and there is no
 retrieval: the pack is a fixed text, small enough to read, and the same for every
 attempt. Its fingerprint goes into every record.
 

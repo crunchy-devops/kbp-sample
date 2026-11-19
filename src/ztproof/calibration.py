@@ -35,7 +35,7 @@ NOT_EVALUATED = [
     ("Canary ingestion: claims extracted from a document as JSON, matching an expected dependency graph",
      "the platform does not extract claims; they are pinned by hand"),
     ("Signature and semantic check: a formaliser and an adversarial auditor on the canary set",
-     "the platform has no formalisation or audit stage; Lean statements are written and reviewed by people"),
+     "the platform has no formalisation or audit stage; Lean statements are pinned by hand before a run, and each names who wrote it and who reviewed it"),
     ("Containerised runners and their memory limit",
      "Lean runs directly on the CI runner; the memory figure below is per Lean process, not per container"),
 ]
