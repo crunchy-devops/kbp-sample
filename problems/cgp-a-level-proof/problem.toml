@@ -1,0 +1,108 @@
+# Books for the training ladder, rung 1 of 5: A-level, proof by hand.
+#
+# Seven exercises from the "Proof" pages of CGP, "Head Start to A-Level Maths"
+# (pages 30 and 31, answers on page 69 of the book), chosen for the book's Lean 4
+# training chapter on 19 November 2026. The Lean statements below were written by
+# the author's Cowork session (Claude) and have NOT been reviewed by a person.
+# No solution is kept here. A reference solution, written by hand, lives under
+# solutions/ and is checked by `ztproof solutions`; a model's proof enters the
+# repository only through the gate, from a real run.
+#
+# The context pack for this problem is context.yaml, next to this file.
+
+id = "cgp-a-level-proof"
+title = "CGP Head Start to A-Level Maths, pages 30 and 31: seven proofs and disproofs"
+source = "CGP, Head Start to A-Level Maths (CGP Books, 2021), section 4, 'Proof', pages 30-31; answers page 69. Chosen for the book's Lean 4 training chapter on 19 November 2026."
+status = "known"
+imports = []
+
+informal = '''
+The seven exercises of the A-level textbook's two pages on proof: three worked examples and four practice questions. Four are direct proofs about even, odd and multiple numbers; three are disproofs by counter-example. They are independent of each other. Nothing is imported: Lean's core library only, so every proof has to be carried out and none can be looked up.
+
+The textbook writes "an even number" as `2x`$ with `x`$ an integer, and "an odd number" as `2x + 1`$. The statements below say exactly that, with an explicit witness, rather than using a library predicate.
+'''
+
+preamble = '''
+namespace Ladder
+
+/-- `IsPrime p`: `p` is at least 2 and its only divisors are 1 and itself. -/
+def IsPrime (p : Nat) : Prop :=
+  2 ≤ p ∧ ∀ d : Nat, d ∣ p → d = 1 ∨ d = p
+
+end Ladder
+'''
+
+[document]
+kind = "exercise"
+authors = "CGP"
+pdf_sha256 = "d5de80252720c4081a447193b19f3ef69ba4be09903f37fcb352d91bd1d9efba"
+
+[[steps]]
+id = "even_difference"
+part = "(a)"
+locator = "p. 30, first worked example"
+informal = "The difference between any two even numbers is always even. With `a = 2x`$ and `b = 2y`$, `a - b = 2n`$ for some integer `n`$."
+theorem = "Ladder.even_sub_even"
+signature = "(a b : Int) (ha : ∃ x, a = 2 * x) (hb : ∃ y, b = 2 * y) : ∃ n, a - b = 2 * n"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "multiple_of_five"
+part = "(b)"
+locator = "p. 30, second worked example"
+informal = "For any integer `a`$, the expression `(3a - 1)(a + 2) + 2(a + 3)(a + 2)`$ is always a multiple of 5."
+theorem = "Ladder.multiple_of_five"
+signature = "(a : Int) : ∃ x, (3 * a - 1) * (a + 2) + 2 * (a + 3) * (a + 2) = 5 * x"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "squares_difference"
+part = "(c)"
+locator = "p. 31, practice question 1; answer p. 69"
+informal = "`(n + 1)^2 - (n - 1)^2`$ is even for any integer `n`$."
+theorem = "Ladder.squares_difference_even"
+signature = "(n : Int) : ∃ k, (n + 1) ^ 2 - (n - 1) ^ 2 = 2 * k"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "odd_product"
+part = "(d)"
+locator = "p. 31, practice question 2; answer p. 69"
+informal = "The product of any two odd numbers is always odd."
+theorem = "Ladder.odd_mul_odd"
+signature = "(a b : Int) (ha : ∃ x, a = 2 * x + 1) (hb : ∃ y, b = 2 * y + 1) : ∃ z, a * b = 2 * z + 1"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "phyllis"
+part = "(e)"
+locator = "p. 31, practice question 4; answer p. 69"
+informal = "Phyllis believes that `2^n + 1`$ is always prime. Prove, by finding a counter-example, that Phyllis is wrong. The textbook says 'when `n`$ is an integer'; `2^n`$ is a whole number only for `n \\ge 0`$, so `n`$ is a natural number here."
+theorem = "Ladder.phyllis_is_wrong"
+signature = ": ¬ ∀ n : Nat, IsPrime (2 ^ n + 1)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "prime_double_plus_one"
+part = "(f)"
+locator = "p. 31, first worked example"
+informal = "Disprove, by counter-example: 'when `x`$ is prime, `2x + 1`$ is prime'."
+theorem = "Ladder.not_prime_double_plus_one"
+signature = ": ¬ ∀ x : Nat, IsPrime x → IsPrime (2 * x + 1)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "squares_order"
+part = "(g)"
+locator = "p. 31, second worked example"
+informal = "Disprove, by counter-example: 'given that `a`$ and `b`$ are integers, if `a > b`$ then `a^2 + 1 > b^2 + 1`$'."
+theorem = "Ladder.squares_not_monotone"
+signature = ": ¬ ∀ a b : Int, b < a → b ^ 2 + 1 < a ^ 2 + 1"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""

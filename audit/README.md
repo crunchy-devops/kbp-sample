@@ -25,6 +25,31 @@ audit/runs/<run id>/
       verdict.json      each gate stage, the facts read from the compiled module, the decision
 ```
 
+## Reading a run
+
+A run directory is evidence, and it is read the way a referee reads a proof: from the claim down to the step that justifies it, never from the model's own account. Eight steps, in this order. Stop at the first one that fails.
+
+1. **Which run is this?** Open `REPORT.md` and read the table under "The run": platform version, commit, batch, model asked, prompt version, Lean and Mathlib versions, and the Stage 0 line. A production run says `GO`, with the calibration's run id. "None: this run was not cleared by a calibration" means it was started by hand; its results stand, but nothing vouches that the configuration was healthy. "The run was cut short" means stop here and read why.
+2. **What was asked?** "Summary by document" counts, for each document, the claims pinned, proved, attempted and not proved, and without a Lean statement, and how many statements no human has reviewed. A claim with no Lean statement was never sent to a model: it is a gap in the formalisation, not a failure of the proof.
+3. **What does each claim's status mean?** Each claim opens with one line. Read it with the table below.
+4. **Why was it accepted?** Under "Evidence for acceptance", five checks, each with the tool that made it and its duration. All five must say passed. Then the axioms the proof rests on: only `propext`, `Classical.choice` and `Quot.sound` are allowed, and a proof may use fewer.
+5. **What was tried?** "Attempt history" gives every attempt, its outcome and the gate's reason, with links to the files. The table of outcomes below says who decided each one: the glue, `lean`, `lean/Gate.lean` or `leanchecker`.
+6. **Open the files.** In `<problem>/<step>/attempt-NN/`: `verdict.json` first, for the stages and the facts read from the compiled module; then `attempt.lean`, the only text the model wrote that counts; then `prompt.md` and `reply.md`, for what the model was told and what it said. Nothing in `reply.md` is evidence: a model's claim that its proof is complete counts for nothing.
+7. **Check the fingerprints.** `statement_sha256` in `verdict.json` must match `statement.json`, and `context_sha256` must match `run.json`. If they do not, the attempt was checked against something other than what was pinned.
+8. **Read what the report does not establish.** Its last section is not boilerplate: a proof of the wrong statement is still a proof, and every statement here is unreviewed until `statement.json` names a reviewer.
+
+| Status line in `REPORT.md` | What it lets you say | What it does not let you say |
+| --- | --- | --- |
+| **proved**, attempt k of n | The kernel accepted a proof of the pinned Lean statement, on the toolchain named, with standard axioms only | That the Lean statement is the exercise, unless a reviewer is named |
+| **proved, assuming** `X` | The statement holds whenever the named assumption does | Anything about the assumption itself |
+| not proved after k attempt(s) | Every attempt was refused, each for the reason given | That the claim is false. Not proved is not disproved |
+| statement invalid | Our pinned statement did not elaborate, so no model was asked | Anything about the model or the claim. It is our bug |
+| not attempted, or reply awaiting verification | Nothing yet | Anything |
+| not proved, for a negative control | The expected result: the statement is known to be false | |
+| **ACCEPTED, AND IT MUST NOT BE** | The gate has a hole. Stop everything | |
+
+For the training ladder there is one more step. Each exercise of the batch `training-books` has a reference solution written in the reader's seat, under `solutions/<problem>/<step>.lean`, which `ztproof solutions` checks with the same gate. Put the model's `attempt.lean` beside it and compare: the statement is the same by construction, so what differs is the route, the tactics and the axioms. The reference solution is never in the run directory, because it was never sent to the model and is not a result of the run.
+
 ## Outcomes
 
 | Outcome | Meaning | Decided by |

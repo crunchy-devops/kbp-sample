@@ -1,0 +1,100 @@
+# Books for the training ladder, rung 1 of 5: A-level, with Mathlib.
+#
+# Seven exercises from CGP, "Head Start to A-Level Maths": solving equations and
+# inequalities (pages 25, 28 and 29) and the proofs about rational and irrational
+# numbers (page 31), chosen for the book's Lean 4 training chapter on 19 November
+# 2026. They need the real numbers, so Mathlib is imported. The Lean statements were
+# written by the author's Cowork session (Claude) and have NOT been reviewed by a
+# person. They have not yet been elaborated against the whole of Mathlib: the first
+# CI run of version 0.7.0 is the first to do so.
+#
+# The lesson of this rung is in the statements more than in the proofs. "Solve"
+# means "find every solution and nothing else", so each equation is pinned as an
+# "if and only if". The textbook's "check your answer" is only the right-to-left half.
+#
+# The context pack for this problem is context.yaml, next to this file.
+
+id = "cgp-a-level-algebra"
+title = "CGP Head Start to A-Level Maths: solving, and proofs about rational numbers"
+source = "CGP, Head Start to A-Level Maths (CGP Books, 2021), pages 25, 28, 29 and 31; answers pages 67-70. Chosen for the book's Lean 4 training chapter on 19 November 2026."
+status = "known"
+imports = ["Mathlib"]
+
+informal = '''
+Seven A-level exercises that need the real numbers: a pair of linear simultaneous equations, two pairs with a quadratic, a quadratic inequality, the difference of two rational numbers, and two disproofs by counter-example. They are independent of each other. Mathlib is imported, so the library's tactics are available; the interest is in stating each exercise so that it says what the textbook asks, and no less.
+'''
+
+[document]
+kind = "exercise"
+authors = "CGP"
+pdf_sha256 = "d5de80252720c4081a447193b19f3ef69ba4be09903f37fcb352d91bd1d9efba"
+
+[[steps]]
+id = "linear_pair"
+part = "(a)"
+locator = "p. 28, worked example"
+informal = "Solve the simultaneous equations `3x - 2y = 1`$ and `2x + 3y = 11.5`$. The solution is `x = 2`$, `y = 2.5`$, and it is the only one. `11.5`$ is written `23/2`$."
+theorem = "Ladder.linear_pair"
+signature = "(x y : ℝ) : (3 * x - 2 * y = 1 ∧ 2 * x + 3 * y = 23 / 2) ↔ (x = 2 ∧ y = 5 / 2)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "line_and_circle"
+part = "(b)"
+locator = "p. 29, worked example"
+informal = "Solve the simultaneous equations `2y = 5 - x`$ and `x^2 + y^2 = 10`$. The solutions are `x = -1, y = 3`$ and `x = 3, y = 1`$, and there are no others."
+theorem = "Ladder.line_and_circle"
+signature = "(x y : ℝ) : (2 * y = 5 - x ∧ x ^ 2 + y ^ 2 = 10) ↔ ((x = -1 ∧ y = 3) ∨ (x = 3 ∧ y = 1))"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "line_and_parabola"
+part = "(c)"
+locator = "p. 29, practice question 1 a); answer p. 70"
+informal = "Solve the simultaneous equations `y = 4x + 4`$ and `y = x^2 + 3x - 8`$. The solutions are `x = 4, y = 20`$ and `x = -3, y = -8`$, and there are no others."
+theorem = "Ladder.line_and_parabola"
+signature = "(x y : ℝ) : (y = 4 * x + 4 ∧ y = x ^ 2 + 3 * x - 8) ↔ ((x = 4 ∧ y = 20) ∨ (x = -3 ∧ y = -8))"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "quadratic_inequality"
+part = "(d)"
+locator = "p. 25, practice question 3 b); answer p. 67"
+informal = "Find the set of values of `x`$ for which `2x - x^2 + 8 > 0`$. The answer is `-2 < x < 4`$."
+theorem = "Ladder.quadratic_inequality"
+signature = "(x : ℝ) : 2 * x - x ^ 2 + 8 > 0 ↔ (-2 < x ∧ x < 4)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "rational_difference"
+part = "(e)"
+locator = "p. 31, practice question 3; answer p. 69"
+informal = "The result of subtracting a rational number from any other rational number is also rational. A rational number is written, as in the textbook, `a/b`$ with `a`$, `b`$ integers and `b \\ne 0`$."
+theorem = "Ladder.rational_difference"
+signature = "(x y : ℝ) (hx : ∃ a b : ℤ, b ≠ 0 ∧ x = (a : ℝ) / (b : ℝ)) (hy : ∃ c d : ℤ, d ≠ 0 ∧ y = (c : ℝ) / (d : ℝ)) : ∃ p q : ℤ, q ≠ 0 ∧ x - y = (p : ℝ) / (q : ℝ)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "ian_is_wrong"
+part = "(f)"
+locator = "p. 31, third worked example"
+informal = "Ian says: 'if `x`$ and `y`$ are two different irrational numbers, then `xy`$ must also be irrational'. Show that Ian is wrong. The textbook's counter-example is `\\sqrt{8} \\times \\sqrt{2} = 4`$."
+theorem = "Ladder.ian_is_wrong"
+signature = ": ¬ ∀ x y : ℝ, Irrational x → Irrational y → x ≠ y → Irrational (x * y)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "ratio_of_squares"
+part = "(g)"
+locator = "p. 31, practice question 5; answer p. 69"
+informal = "Find a counter-example to disprove: 'for any pair of integers `x`$ and `y`$, `x^2/y^2 < x/y`$'. The textbook divides by `y`$, so `y \\ne 0`$ is part of the claim being disproved."
+theorem = "Ladder.ratio_of_squares"
+signature = ": ¬ ∀ x y : ℤ, y ≠ 0 → (x : ℝ) ^ 2 / (y : ℝ) ^ 2 < (x : ℝ) / (y : ℝ)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""

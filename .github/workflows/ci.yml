@@ -1,8 +1,8 @@
 name: CI
 
 # The checks that need no model and no secret: the gate against its own cheats,
-# the golden set against its reference proofs, every pinned statement, and every
-# proof accepted so far.
+# the golden set against its reference proofs, the reference solutions of the
+# training ladder, every pinned statement, and every proof accepted so far.
 
 on:
   push:
@@ -42,6 +42,9 @@ jobs:
 
       - name: The golden set's reference proofs pass the gate
         run: ztproof golden
+
+      - name: The reference solutions pass the gate
+        run: ztproof solutions --summary
 
       - name: Every pinned statement elaborates
         run: ztproof check
