@@ -1,0 +1,42 @@
+# Context pack for the CGP A-level proof exercises (rung 1 of the training ladder).
+# Written by the author's Cowork session (Claude) on 19 November 2026, and not yet
+# reviewed by a person. The same for every attempt; never changed during a run.
+
+problem:
+  id: cgp-a-level-proof
+  informal: >
+    The seven exercises of the A-level textbook's two pages on proof: three worked examples and four practice questions. Four are direct proofs about even, odd and multiple numbers; three are disproofs by counter-example. They are independent of each other. Nothing is imported: Lean's core library only, so every proof has to be carried out and none can be looked up.
+  level: "rung 1 of 5, A-level"
+  field: "direct proof with witnesses, and disproof by counter-example"
+  source: "CGP, Head Start to A-Level Maths, pages 30-31"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+
+imports: []                # Lean's core library only
+
+conventions:
+  - "Integers have type Int; natural numbers have type Nat."
+  - "An even number is written with its witness, ∃ x, a = 2 * x; an odd number as ∃ x, a = 2 * x + 1. A multiple of 5 is ∃ x, e = 5 * x."
+  - "A disproof is a proof of a negation: ¬ ∀ ..., and it is finished by exhibiting the counter-example and checking it."
+  - "Prime is IsPrime, defined in the fixed lines; it is not Mathlib's Nat.Prime."
+  - "Nothing is imported. Core tactics such as intro, exact, refine, cases, omega, simp, decide and calc are available."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib:
+  - "Mathlib: no Nat.Prime, no Even, no Odd, no Int.even_mul_succ_self"
+  - "Mathlib's tactics: ring, linarith, nlinarith, positivity, norm_num"
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 4
+  max_seconds_per_build: 120
+  max_heartbeats: 200000

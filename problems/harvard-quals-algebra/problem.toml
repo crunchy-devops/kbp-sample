@@ -1,0 +1,111 @@
+# Books for the training ladder, rung 5 of 5: PhD qualifying examination.
+#
+# Eight algebra and number theory questions from "Harvard University PhD Mathematics
+# Qualifying Examinations, 2020-1970", a compilation of past papers, some with
+# solutions. Chosen for the book's Lean 4 training chapter on 19 November 2026,
+# because each can be stated in Lean 4 with Mathlib as it stands. Five come with a
+# written solution in the compilation; three do not, and the locator says so.
+#
+# The Lean statements were written by the author's Cowork session (Claude) and have
+# NOT been reviewed by a person. They have not yet been elaborated against the whole
+# of Mathlib: the first CI run of version 0.7.0 is the first to do so. Two of them
+# are deliberately not word for word the examination's question, and say so: the
+# first pins the counter-example that the solution uses, and the order-21 question
+# pins its uniqueness half only.
+#
+# The context pack for this problem is context.yaml, next to this file.
+
+id = "harvard-quals-algebra"
+title = "Harvard PhD qualifying examinations: eight questions in algebra and number theory"
+source = "Harvard University, Department of Mathematics, PhD qualifying examinations, in the compilation 'Harvard University PhD Mathematics Qualifying Examinations, 2020-1970'. Chosen for the book's Lean 4 training chapter on 19 November 2026."
+status = "known"
+imports = ["Mathlib"]
+
+informal = '''
+Eight questions set at Harvard's PhD qualifying examination between 1997 and 2020, in algebra and number theory: quadratic rings, finite fields and cyclic groups, small groups, irreducible polynomials, p-groups and primes in arithmetic progressions. They are independent of each other. Mathlib is imported, and it already holds some of the results in some form; a proof that cites the library is a proof, and the report will show it for what it is.
+'''
+
+[document]
+kind = "exercise"
+authors = "Harvard University, Department of Mathematics"
+pdf_sha256 = "e93ba5ef439190d598e03d75f8abf60ab3309ceb7ff280797bed0f6da70d6cde"
+
+[[steps]]
+id = "zsqrtd_not_ufd"
+part = "(a)"
+locator = "21 January 2020, day 1, question 1 (A); solution in the compilation, PDF pages 8-9"
+informal = "Show that `\\mathbb{Z}[\\sqrt{p}]`$ is not a unique factorisation domain for a prime `p \\equiv 1 \\pmod 4`$. Pinned as the counter-example of the solution: `2`$ is irreducible in `\\mathbb{Z}[\\sqrt{p}]`$ but not prime, since it divides `p - 1 = (\\sqrt{p} + 1)(\\sqrt{p} - 1)`$ and neither factor. The step from there to 'not a unique factorisation domain' is not part of the Lean statement."
+theorem = "Ladder.two_irreducible_not_prime"
+signature = "(p : ℕ) (hp : p.Prime) (h4 : p % 4 = 1) : Irreducible (2 : Zsqrtd (p : ℤ)) ∧ ¬ Prime (2 : Zsqrtd (p : ℤ))"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "finite_units_cyclic"
+part = "(b)"
+locator = "30 August 2016, day 1, question 5 (a) (A); solution in the compilation, PDF page 62"
+informal = "A finite subgroup of the multiplicative group of a field is cyclic. The examination asks it for the splitting field of `x^n - 1`$ over `\\mathbb{Q}`$; the statement below is the general case, which the solution proves."
+theorem = "Ladder.finite_units_cyclic"
+signature = "(F : Type) [Field F] (A : Subgroup Fˣ) [Finite A] : IsCyclic A"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "order_21"
+part = "(c)"
+locator = "1 September 2016, day 3, question 5 (a) (A); solution in the compilation, PDF page 71"
+informal = "There is a unique non-abelian group of order 21, up to isomorphism. Pinned here: the uniqueness half, that any two non-abelian groups of order 21 are isomorphic. The existence half is not pinned."
+theorem = "Ladder.order_21_unique"
+signature = "(G H : Type) [Group G] [Group H] (hG : Nat.card G = 21) (hH : Nat.card H = 21) (hGn : ∃ a b : G, a * b ≠ b * a) (hHn : ∃ a b : H, a * b ≠ b * a) : Nonempty (G ≃* H)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "x6_plus_3_rational"
+part = "(d)"
+locator = "16 September 2008, day 1, question 1, the first line of the solution to (a); solution in the compilation, PDF page 273"
+informal = "The polynomial `X^6 + 3`$ is irreducible over `\\mathbb{Q}`$, by Eisenstein's criterion at the prime 3."
+theorem = "Ladder.x6_plus_3_irreducible"
+signature = ": Irreducible (Polynomial.X ^ 6 + 3 : Polynomial ℚ)"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "x6_plus_3_mod_p"
+part = "(e)"
+locator = "16 September 2008, day 1, question 1 (c); solution in the compilation, PDF page 273"
+informal = "There is no prime `p`$ such that `X^6 + 3`$ is irreducible over the field with `p`$ elements."
+theorem = "Ladder.x6_plus_3_reducible_mod_p"
+signature = "(p : ℕ) (hp : p.Prime) : ¬ Irreducible (Polynomial.X ^ 6 + 3 : Polynomial (ZMod p))"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "cubic_irreducible"
+part = "(f)"
+locator = "3 September 2009, day 3, question 1 (a) (A); no solution in the compilation, PDF page 260"
+informal = "Let `c`$ be an integer not divisible by 3. The polynomial `x^3 - x + c`$ is irreducible over `\\mathbb{Q}`$."
+theorem = "Ladder.cubic_irreducible"
+signature = "(c : ℤ) (hc : ¬ (3 : ℤ) ∣ c) : Irreducible (Polynomial.X ^ 3 - Polynomial.X + Polynomial.C (c : ℚ))"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "p_group_not_simple"
+part = "(g)"
+locator = "27 January 2009, day 1, question 3 (a); no solution in the compilation, PDF page 262"
+informal = "Let `p`$ be a prime. A group of order `p^n`$ with `n > 1`$ has a non-trivial normal subgroup: it is not a simple group."
+theorem = "Ladder.p_group_not_simple"
+signature = "(p n : ℕ) (hp : p.Prime) (hn : 1 < n) (G : Type) [Group G] (hG : Nat.card G = p ^ n) : ¬ IsSimpleGroup G"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""
+
+[[steps]]
+id = "primes_three_mod_four"
+part = "(h)"
+locator = "25 February 1997, day 1, question 3 a.; no solution in the compilation, PDF page 352"
+informal = "There are infinitely many primes `p`$ congruent to 3 modulo 4: above every natural number there is one."
+theorem = "Ladder.primes_three_mod_four"
+signature = "(n : ℕ) : ∃ p : ℕ, n < p ∧ p.Prime ∧ p % 4 = 3"
+formalised_by = "Claude, in the author's Cowork session, 19 November 2026"
+reviewed_by = ""

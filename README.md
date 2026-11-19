@@ -97,6 +97,10 @@ The command fails on either of the last two. It also fails when the folder as a 
 | `training-1-a-level/sqrt_two/weakened_statement` | Same hypothesis, a conclusion true of every number | `statement_mismatch` |
 | `training-2-first-year/euclid_lemma/added_hypothesis` | Euclid's lemma, assuming the conclusion | `statement_mismatch` |
 | `training-2-first-year/pigeonhole/sorry` | The pigeons left to sort themselves out | `sorry` |
+| `cgp-a-level-proof/phyllis/weakened_statement` | "`2^n`$ is not always prime", which is true and is not the exercise | `statement_mismatch` |
+| `cgp-a-level-proof/odd_product/added_hypothesis` | The product assumed odd | `statement_mismatch` |
+| `cgp-a-level-algebra/linear_pair/one_direction` | The textbook's "check your answer": the values satisfy the equations, and nothing says they are the only ones | `statement_mismatch` |
+| `harvard-quals-algebra/x6_plus_3_rational/sorry` | Eisenstein's criterion, left as an exercise | `sorry` |
 
 To add a canary:
 
@@ -122,6 +126,7 @@ ztproof canaries          # every canary is rejected, each for its own reason
 ztproof problems          # what is pinned, and what has been reviewed
 ztproof check             # every pinned statement elaborates
 ztproof golden            # the golden set's reference proofs pass the gate
+ztproof solutions         # the training ladder's reference solutions pass the gate
 ztproof recheck           # every accepted proof still passes
 
 # The exact prompt for one claim, without asking anybody:
@@ -174,7 +179,7 @@ Three things in the usual description of such a stage are not here, and the repo
 
 Two workflows, in `.github/workflows/`.
 
-**CI** runs on every push and needs no secret. It runs the gate's test suite, sends every canary through the gate, checks the golden set against its reference proofs, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
+**CI** runs on every push and needs no secret. It runs the gate's test suite, sends every canary through the gate, checks the golden set against its reference proofs, checks the training ladder's reference solutions, checks that every pinned statement elaborates, and puts every accepted proof through the gate again.
 
 **Prove** runs when a problem, a batch, a prompt or the golden set changes, or on demand. It needs one repository secret, `ANTHROPIC_API_KEY`; without it the workflow says so and records nothing. With it, the workflow runs Stage 0 first, and Stage 0 begins with the canaries: if one of them is accepted, or dies of the wrong thing, the job stops before a single token is spent. The results are kept in the golden run as `canaries.json`. On a no-go the job fails there, the calibration is committed to `audit/runs/`, and no document of the batch is touched. On a go it starts a run for the batch it was given, with the worker pools Stage 0 computed, alternates "ask the model" and "verify in Lean" for up to eight rounds, commits both runs to `audit/runs/` and any accepted proof to `proofs/`, and prints the calibration and the referee report as the job summary.
 
@@ -270,6 +275,27 @@ Three things to know before reading a result.
 
 A reader's attempt through `ztproof gate` is checked exactly as a model's is, and is not recorded: the audit trail holds real model runs only.
 
+### Exercises chosen from two books
+
+The folklore list above was a start. Version 0.7.0 adds exercises chosen from two books the author supplied, so that the bottom and the top of the ladder each rest on a document that can be found again. Each problem records the SHA-256 of the PDF it was read from, and each claim its page.
+
+| Rung | Book | Problem | Imports | Exercises |
+| --- | --- | --- | --- | --- |
+| 1 | CGP, *Head Start to A-Level Maths*, pages 30-31 | `cgp-a-level-proof` | Nothing | Seven proofs and disproofs: the difference of two even numbers, a multiple of 5, `(n+1)^2 - (n-1)^2`$ is even, the product of two odd numbers, and three counter-examples (`2^n + 1`$, `2x + 1`$, `a^2 + 1`$) |
+| 1 | The same book, pages 25, 28, 29 and 31 | `cgp-a-level-algebra` | Mathlib | Three pairs of simultaneous equations and a quadratic inequality, each pinned as an "if and only if"; the difference of two rational numbers; two counter-examples about irrational numbers and about `x^2/y^2 < x/y`$ |
+| 5 | Harvard PhD qualifying examinations, 1997-2020 | `harvard-quals-algebra` | Mathlib | `2`$ is irreducible and not prime in `\mathbb{Z}[\sqrt{p}]`$; finite subgroups of a field's units are cyclic; non-abelian groups of order 21 are isomorphic; `X^6 + 3`$ over `\mathbb{Q}`$ and over every `\mathbb{F}_p`$; `x^3 - x + c`$; p-groups are not simple; primes `\equiv 3 \pmod 4`$ |
+
+```bash
+ztproof run --batch training-books --jobs 2        # needs ANTHROPIC_API_KEY
+ztproof solutions --only cgp-a-level-proof         # the reader's solutions, no key needed
+```
+
+Three things to know about them.
+
+* **"Solve" is pinned as "if and only if".** The textbook checks an answer by putting it back into the equations. That proves one direction only, and a canary, `one_direction`, makes exactly that move and must be rejected.
+* **Two Harvard statements are not word for word the question.** "Not a unique factorisation domain" is pinned as the counter-example the written solution uses, and "a unique non-abelian group of order 21" as its uniqueness half. Each says so in its informal text. The compilation's written solutions are never given to the model.
+* **Reference solutions, in the reader's seat.** `solutions/<problem>/<step>.lean` holds a solution written by hand for comparison, with `-- written_by:` and `-- reviewed_by:` at the top. `ztproof solutions` sends each through the gate, in CI on every push. They are never sent to a model, never filed under `proofs/` and never counted as a result. Today the seven solutions of `cgp-a-level-proof` exist, written by the author's Cowork session and reviewed by nobody; the Mathlib exercises have none yet.
+
 ## Documents, claims and batches
 
 The unit of work is a batch of documents. A document is a preprint, an exercise or a note; its claims are the steps we pin for it; and a batch is a named list of documents in `batches/`, run together.
@@ -293,7 +319,7 @@ Formulas in the informal text use the manuscript's convention, a code span follo
 
 Facts a problem lets us assume, and earlier parts a later part relies on, enter a Lean statement as explicit hypotheses. They never enter as axioms, which the gate would reject in any case.
 
-Eight problems are pinned today. Four are the rungs of the training ladder, described above. The others:
+Eleven problems are pinned today. Four are the rungs of the training ladder and three hold its book exercises, described above. The others:
 
 * `fermat-three`: the book's worked exercise. For a prime `p \ge 5`$, the equation `x^p + y^p = 3z^p`$ has no solution in non-zero integers with `\gcd(x, y, z) = 1`$. Three claims, a chain: the solution is pairwise coprime; it gives a Frey triple; and, assuming `FreyLevelSix`, there is no solution. `FreyLevelSix` stands for the modular method at level 6, none of which is in Mathlib. The Lean statements and the definition of the assumption have not been reviewed by a number theorist, and the reports say so on every page.
 * `golden-core`: five small known results in core Lean, the positive half of the golden set. If one of these fails, look at the platform before blaming the model.

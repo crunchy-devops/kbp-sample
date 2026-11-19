@@ -1,0 +1,12 @@
+# The training ladder's book exercises: candidates chosen from two books.
+#
+# Rung 1 comes from CGP, "Head Start to A-Level Maths": seven proofs by hand that
+# import nothing, then seven exercises that need the real numbers. Rung 5 comes
+# from the Harvard PhD qualifying examinations. Rungs 2 to 4 have no book yet and
+# stay in the batch `training`. Run this batch to get an audit trail and a referee
+# report for every exercise; the reference solutions under solutions/ are never
+# given to the model and never recorded as its results.
+
+id = "training-books"
+title = "Training ladder: exercises chosen from an A-level textbook and from PhD qualifying examinations"
+problems = ["cgp-a-level-proof", "cgp-a-level-algebra", "harvard-quals-algebra"]

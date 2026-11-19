@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import __version__, calibration, canary, gate, lean
+from . import __version__, calibration, canary, gate, lean, solutions
 from .generator import DEFAULT_EFFORT, DEFAULT_MODEL
 from .pipeline import (BATCHES_DIR, PROBLEMS_DIR, Run, check_statements, generate_round, init_run,
                        recheck_proofs, verify_round)
@@ -124,6 +124,28 @@ def cmd_canaries(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 1
     return 0
+
+
+def cmd_solutions(args: argparse.Namespace) -> int:
+    """Every reference solution through the gate. No model, no key, nothing recorded."""
+    problems = load_all(PROBLEMS_DIR)
+    found = solutions.load_solutions(problems)
+    if args.only:
+        found = [s for s in found if s.problem in args.only]
+    if not found:
+        print("ztproof: no reference solutions found under solutions/", file=sys.stderr)
+        return 1
+    results = solutions.run_solutions(found, problems, _config(args))
+    text = solutions.render(results)
+    print(text)
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY") if args.summary else None
+    if summary_file:
+        with open(summary_file, "a", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    failed = [r for r in results if not r.ok]
+    for r in failed:
+        print(f"ztproof: {r.solution.key}: {r.outcome}: {r.reason}", file=sys.stderr)
+    return 1 if failed else 0
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
@@ -349,6 +371,9 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--only", action="append", metavar="PROBLEM", help="restrict to one problem's canaries; repeatable")
     k.add_argument("--run", help="also record the results in this run directory, as canaries.json")
     k.add_argument("--summary", action="store_true", help="also append the table to the CI job summary")
+    so = add("solutions", cmd_solutions, "check the reference solutions under solutions/ against the gate, with no model")
+    so.add_argument("--only", action="append", metavar="PROBLEM", help="restrict to one problem's solutions; repeatable")
+    so.add_argument("--summary", action="store_true", help="also append the table to the CI job summary")
     c = add("calibrate", cmd_calibrate, "Stage 0: go or no-go and worker pools, from a finished golden run")
     c.add_argument("--run", required=True, help="run directory of the golden batch")
     c.add_argument("--next-batch", metavar="BATCH", help="the batch this calibration is meant to clear; an empty value means every problem outside the golden sets")

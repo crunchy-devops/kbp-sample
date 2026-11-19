@@ -1,0 +1,42 @@
+# Context pack for the CGP A-level exercises that need the real numbers
+# (rung 1 of the training ladder, with Mathlib). Written by the author's Cowork
+# session (Claude) on 19 November 2026, and not yet reviewed by a person. The same
+# for every attempt; never changed during a run.
+
+problem:
+  id: cgp-a-level-algebra
+  informal: >
+    Seven A-level exercises that need the real numbers: a pair of linear simultaneous equations, two pairs with a quadratic, a quadratic inequality, the difference of two rational numbers, and two disproofs by counter-example. They are independent of each other. Mathlib is imported, so the library's tactics are available; the interest is in stating each exercise so that it says what the textbook asks, and no less.
+  level: "rung 1 of 5, A-level, with Mathlib"
+  field: "simultaneous equations, quadratic inequalities, rational and irrational numbers"
+  source: "CGP, Head Start to A-Level Maths, pages 25, 28, 29 and 31"
+
+library: Ladder            # the namespace of every theorem
+
+toolchain:
+  lean: leanprover/lean4:v4.35.0
+  mathlib: v4.35.0
+
+imports:
+  - Mathlib
+
+conventions:
+  - "Unknowns are real numbers (type ℝ) unless the textbook says integers (type ℤ)."
+  - "'Solve' is stated as an 'if and only if': the equations hold exactly when the unknowns take the listed values. Both directions must be proved."
+  - "A rational number is written with its witness, a / b with a and b integers and b ≠ 0, cast to ℝ. Irrational is Mathlib's Irrational."
+  - "A disproof is a proof of a negation, finished by exhibiting the counter-example and checking it."
+  - "Use the keyword theorem for every claim, inside namespace Ladder."
+
+assumptions: []            # nothing may be assumed: every claim is proved in full
+
+not_in_mathlib: []
+
+forbidden:
+  - "sorry, admit, axiom, native_decide, decide +native"
+  - "changing the definitions or the pinned statement"
+  - "adding a hypothesis to a theorem"
+
+budget:
+  max_attempts: 4
+  max_seconds_per_build: 600
+  max_heartbeats: 400000

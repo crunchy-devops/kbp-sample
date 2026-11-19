@@ -2,6 +2,30 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.7.0, 19 November 2026
+
+Exercises chosen from two books, reference solutions in the reader's seat, and a guide to reading a run.
+
+### What is new
+
+* **Three new problems, 22 claims, from two books.** `cgp-a-level-proof` and `cgp-a-level-algebra` take fourteen exercises from CGP, *Head Start to A-Level Maths*; `harvard-quals-algebra` takes eight questions from the Harvard PhD qualifying examinations, 1997 to 2020. Each problem records the SHA-256 of the PDF it was read from, and each claim its page and question. Each has a context pack.
+* **A batch, `training-books`**, which runs the three in order, from A-level to PhD.
+* **Reference solutions.** `solutions/<problem>/<step>.lean` holds a solution written by hand, in the reader's seat, with who wrote it and who reviewed it. `ztproof solutions` sends each through the gate and prints the axioms it rests on; CI runs it on every push. A reference solution is never sent to a model, never filed under `proofs/` and never counted as a result. Seven exist, for `cgp-a-level-proof`; all seven pass the gate on core Lean, and none needs `Classical.choice`.
+* **Four more canaries**, among them `one_direction`: the textbook's "check your answer", which proves only half of "solve".
+* **"Reading a run"**, in `audit/README.md`: the order in which to read a run directory, and what each status line lets a reader claim.
+* The selection is shared with the book: it is chapter 5 of the outline, changed on the author's request of 19 November 2026.
+
+### What went wrong
+
+1. **No Mathlib on the build machine, again, and this time none at all.** The Mathlib cache server refused every download from the machine that wrote this version, and two processor cores cannot build Mathlib from source in an afternoon. So the fifteen new statements that import Mathlib, and the two Mathlib canaries, have never been elaborated by anybody. The CI run of this version is the first to try. If a statement does not elaborate, `ztproof check` fails and says which; that is the platform's bug, and the report calls it `statement_invalid`, never the model's failure.
+2. **The first reference solution the gate saw was wrong.** The solution to "a multiple of 5" first ended with `omega`, which treats `a * a`, `3 * a * a` and `2 * a * a` as three unrelated unknowns and could not finish. The gate said `lean_error`, with omega's own counter-example. Two lines stating how the three products relate fixed it. A reader will meet the same wall.
+
+### What it does not do
+
+* **No reference solution for a Mathlib exercise.** For the reason above, nothing here could check one. The Mathlib exercises go to the model first.
+* **No statement has been reviewed by a person**, nor any reference solution.
+* **It cannot forbid a library theorem**, as before. Mathlib holds some of the Harvard results in some form, and a one-line citation passes the gate.
+
 ## 0.6.0, 17 November 2026
 
 The training ladder: classic exercises from A-level to PhD, pinned in order.
