@@ -2,6 +2,22 @@
 
 Every version lists what it does, what it does not do, and what went wrong on the way. The failures are kept on purpose: they are source material for *Zero-trust AI*.
 
+## 0.7.1, 20 November 2026
+
+A licence, so that reading this repository is no longer the only thing a stranger may lawfully do with it.
+
+### What is new
+
+* **An MIT licence**, in `LICENSE` at the root: copyright 2026, Herve MEFTAH. Until today the repository had none, which in law means "all rights reserved", however public the page.
+* `pyproject.toml` and `lakefile.toml` declare it, as the SPDX identifier `MIT`. The Python build now asks for setuptools 77 or later, the first to read a licence written that way.
+* The README says what the licence covers and what it does not.
+
+### What it does not do
+
+* **It does not license other people's text.** The exercises quoted from the CGP book and from the Harvard examinations remain their authors'.
+* **It does not reach back.** The history before 14 November 2026 holds an unrelated sample application by other authors, deleted from the tree and never licensed here. The notice covers what is in the tree today.
+* **It changes the platform's fingerprint.** `pyproject.toml` and `lakefile.toml` are platform files, so a calibration made on 0.7.0 would not clear a batch on 0.7.1. None is on file.
+
 ## 0.7.0, 19 November 2026
 
 Exercises chosen from two books, reference solutions in the reader's seat, and a guide to reading a run.
