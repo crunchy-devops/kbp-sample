@@ -346,3 +346,9 @@ A run cleared by Stage 0 names the calibration in its report. A calibration run 
 ## Version history
 
 `CHANGELOG.md`, failures included.
+
+## Licence
+
+MIT: see `LICENSE`. Use it, change it, sell it; keep the copyright notice, and expect no warranty. The licence is the one document in this repository that asks to be taken on trust.
+
+It covers what was written for this platform: the code, the prompts, the Lean statements and the prose. Exercises quoted from somebody else's book or examination paper remain their authors', and each problem names its source.
